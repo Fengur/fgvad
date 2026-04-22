@@ -1,13 +1,16 @@
 //! fgvad — intelligent VAD library.
 //!
-//! 当前阶段：最小安全封装。对外只暴露逐帧的 `probability` 与 `is_voice`，
-//! 状态机、计时和事件会在后续 commit 加入。
+//! 在 ten-vad 之上叠加状态机和动态端点策略。目前仅实现短时模式。
 
 #[cfg(target_os = "macos")]
 pub mod sys;
 
+pub mod state_machine;
+
 #[cfg(target_os = "macos")]
 mod vad;
+
+pub use state_machine::{EndReason, Event, Mode, ShortModeConfig, State};
 
 #[cfg(target_os = "macos")]
 pub use vad::{Error, FgVad, FrameResult};

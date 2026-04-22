@@ -1,31 +1,32 @@
-//! `FgVad` —— ten-vad 的安全 Rust 封装。
+//! `FgVad` —— ten-vad + 状态机 + 帧缓冲的对外入口。
 //!
 //! 设计要点：
 //!
-//! 1. **对外只认任意长度的 `&[i16]`**。ten-vad 要求固定帧长（256 样本 @ 16 kHz），
-//!    这是实现细节，不应泄漏给调用方。内部开一个 `pending` 缓冲，攒够 HOP 就跑一次。
-//! 2. **不暴露 threshold**。ten-vad 的概率阈值是实现约定，硬编码 0.5。真有必要
-//!    再包成 `Sensitivity::{Low, Normal, High}`。
-//! 3. **不暴露 hop_size**。上面一条的直接结果。
-//! 4. **`Drop` 负责回收句柄**。
-//!
-//! 本模块只做"逐帧概率"这层；状态机 / 计时 / 事件会在后续 commit 叠加在 `FgVad` 之上。
+//! 1. **对外只认任意长度的 `&[i16]`**。ten-vad 要求固定帧长（256 样本 @ 16 kHz）。
+//!    内部开 `pending` 缓冲，攒够 HOP 就跑一次。
+//! 2. **不暴露 threshold / hop_size**。ten-vad 的概率阈值硬编码 0.5。
+//! 3. **状态机始终在位**。未 `start()` 时停在 `Idle`，仍可拿到原始概率做可视化。
+//! 4. **`Drop` 负责回收 ten-vad 句柄**。
 
+use crate::state_machine::{Event, Mode, ShortModeConfig, State, StateMachine};
 use crate::sys;
 
-/// ten-vad 在 16 kHz 下要求每帧 256 样本（16 ms）。写死在库里，不对外暴露。
+/// ten-vad 在 16 kHz 下要求每帧 256 样本。硬编码，不对外暴露。
 const HOP_SIZE: usize = 256;
-
-/// ten-vad 的二值化阈值。0.5 是官方推荐，硬编码。
+/// ten-vad 的概率二值化阈值。官方推荐 0.5，硬编码。
 const THRESHOLD: f32 = 0.5;
 
-/// 单帧 VAD 结果。
+/// 单帧 VAD 输出。
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FrameResult {
     /// ten-vad 输出的原始概率，范围 [0.0, 1.0]。
     pub probability: f32,
     /// 概率 ≥ 内部阈值时为 true。
     pub is_voice: bool,
+    /// 本帧处理完后的状态机状态。
+    pub state: State,
+    /// 本帧触发的事件（若有）。
+    pub event: Option<Event>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -38,40 +39,85 @@ pub enum Error {
 
 pub struct FgVad {
     handle: sys::TenVadHandle,
-    /// 累积但还没凑够 HOP_SIZE 的样本。
     pending: Vec<i16>,
+    state_machine: StateMachine,
 }
 
 impl FgVad {
-    /// 创建一个 VAD 实例。采样率固定 16 kHz。
+    /// 使用默认模式创建（短时 + 默认计时）。未 `start()` 时状态机停在 `Idle`，
+    /// `process` 仍会返回原始概率，便于"预览"使用。
     pub fn new() -> Result<Self, Error> {
+        Self::with_mode(Mode::default())
+    }
+
+    /// 使用指定模式创建。
+    pub fn with_mode(mode: Mode) -> Result<Self, Error> {
         let mut handle: sys::TenVadHandle = std::ptr::null_mut();
         let ret = unsafe { sys::ten_vad_create(&mut handle, HOP_SIZE, THRESHOLD) };
         if ret != 0 || handle.is_null() {
             return Err(Error::InitFailed);
         }
+        let state_machine = match mode {
+            Mode::Short(cfg) => StateMachine::new(cfg),
+        };
         Ok(Self {
             handle,
             pending: Vec::with_capacity(HOP_SIZE * 4),
+            state_machine,
         })
     }
 
-    /// 喂入任意长度的 16 kHz 单声道 i16 PCM 样本，
-    /// 返回本次调用内凑出的所有完整帧的 VAD 结果（可能为空）。
+    /// 便利构造器：短时模式 + 自定义计时。
+    pub fn short(cfg: ShortModeConfig) -> Result<Self, Error> {
+        Self::with_mode(Mode::Short(cfg))
+    }
+
+    /// 开启一次会话：状态机进入 `Detecting`，计时器清零。
+    /// 可反复调用，每次都重开一次会话。
+    pub fn start(&mut self) {
+        self.state_machine.start();
+    }
+
+    /// 外部强制停止当前会话。状态机转入 `End(ExternalStop)`。
+    /// Idle 或已 End 状态下调用无副作用。
+    pub fn stop(&mut self) {
+        self.state_machine.stop();
+    }
+
+    /// 清空内部缓冲和状态。下次使用前需再调 `start()`。
+    pub fn reset(&mut self) {
+        self.pending.clear();
+        self.state_machine.reset();
+    }
+
+    /// 当前状态机状态。
+    pub fn state(&self) -> State {
+        self.state_machine.state()
+    }
+
+    /// 喂入任意长度的 16 kHz 单声道 i16 PCM。
+    /// 返回本次调用中跑完的帧的 VAD 结果（可能为空）。
+    ///
+    /// 一旦状态机进入终态（`End(_)`），后续的 `process` 调用直接返回空 Vec；
+    /// 需调用 `start()` 或 `reset()` 才能继续。
     pub fn process(&mut self, samples: &[i16]) -> Result<Vec<FrameResult>, Error> {
-        if samples.is_empty() && self.pending.len() < HOP_SIZE {
+        if matches!(self.state_machine.state(), State::End(_)) {
             return Ok(Vec::new());
         }
 
         self.pending.extend_from_slice(samples);
 
-        let frame_count = self.pending.len() / HOP_SIZE;
-        let mut results = Vec::with_capacity(frame_count);
+        let available_frames = self.pending.len() / HOP_SIZE;
+        let mut results = Vec::with_capacity(available_frames);
+        let mut consumed = 0usize;
+        let mut terminal = false;
 
-        for i in 0..frame_count {
+        for i in 0..available_frames {
+            if terminal {
+                break;
+            }
             let start = i * HOP_SIZE;
-            let end = start + HOP_SIZE;
-            let frame = &self.pending[start..end];
+            let frame = &self.pending[start..start + HOP_SIZE];
 
             let mut prob: f32 = 0.0;
             let mut flag: i32 = 0;
@@ -87,22 +133,30 @@ impl FgVad {
             if ret != 0 {
                 return Err(Error::ProcessFailed);
             }
+            let is_voice = flag != 0;
+
+            let event = self.state_machine.step(is_voice);
+            let state = self.state_machine.state();
+            if matches!(state, State::End(_)) {
+                terminal = true;
+            }
+
+            consumed += HOP_SIZE;
             results.push(FrameResult {
                 probability: prob,
-                is_voice: flag != 0,
+                is_voice,
+                state,
+                event,
             });
         }
 
-        // 丢掉已消费部分，保留尾巴未满一帧的样本
-        let consumed = frame_count * HOP_SIZE;
         self.pending.drain(..consumed);
+        if terminal {
+            // 会话已结束，丢弃此后剩余样本，避免混进下一次会话。
+            self.pending.clear();
+        }
 
         Ok(results)
-    }
-
-    /// 清空内部缓冲。不重建 ten-vad 句柄，也不重置 ten-vad 内部状态。
-    pub fn reset(&mut self) {
-        self.pending.clear();
     }
 }
 
@@ -119,47 +173,72 @@ impl Drop for FgVad {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state_machine::{EndReason, ShortModeConfig};
 
     #[test]
     fn create_and_drop() {
-        let _vad = FgVad::new().expect("ten-vad 应可创建");
-        // drop 时应无 panic
+        let _vad = FgVad::new().expect("create");
     }
 
     #[test]
-    fn silence_produces_low_probability() {
+    fn idle_without_start_but_process_still_returns_probability() {
         let mut vad = FgVad::new().expect("create");
-        let silence = vec![0i16; HOP_SIZE * 5];
+        assert_eq!(vad.state(), State::Idle);
+        let silence = vec![0i16; HOP_SIZE * 3];
         let out = vad.process(&silence).expect("process");
-        assert_eq!(out.len(), 5, "应产出 5 帧结果");
+        assert_eq!(out.len(), 3);
         for r in &out {
-            assert!(
-                r.probability < 0.3,
-                "静音帧概率应明显低：{}",
-                r.probability
-            );
-            assert!(!r.is_voice, "静音帧不该判为 voice");
+            assert_eq!(r.state, State::Idle);
+            assert!(r.event.is_none());
+            assert!(!r.is_voice);
         }
+    }
+
+    #[test]
+    fn start_puts_state_machine_into_detecting() {
+        let mut vad = FgVad::new().expect("create");
+        vad.start();
+        assert_eq!(vad.state(), State::Detecting);
+    }
+
+    #[test]
+    fn silence_after_start_triggers_head_timeout() {
+        let cfg = ShortModeConfig {
+            head_silence_timeout_ms: 100, // 7 帧
+            ..Default::default()
+        };
+        let mut vad = FgVad::short(cfg).expect("create");
+        vad.start();
+        let silence = vec![0i16; HOP_SIZE * 10];
+        let out = vad.process(&silence).expect("process");
+
+        // 应该在第 7 帧触发 HeadSilenceTimeout 然后停
+        assert!(out.len() == 7, "应处理 7 帧后停下，实得 {}", out.len());
+        assert_eq!(
+            out.last().unwrap().state,
+            State::End(EndReason::HeadSilenceTimeout)
+        );
+        assert_eq!(out.last().unwrap().event, Some(Event::HeadSilenceTimeout));
+
+        // End 后继续 process 应返回空
+        let out2 = vad.process(&silence).expect("post-end");
+        assert!(out2.is_empty());
     }
 
     #[test]
     fn partial_frame_is_buffered() {
         let mut vad = FgVad::new().expect("create");
-        // 喂一半帧
         let half = vec![0i16; HOP_SIZE / 2];
-        let out = vad.process(&half).expect("half");
-        assert!(out.is_empty(), "未凑够一帧时不应返回结果");
-
-        // 再喂一半，应得 1 帧
-        let out = vad.process(&half).expect("rest");
-        assert_eq!(out.len(), 1);
+        assert!(vad.process(&half).expect("h1").is_empty());
+        assert_eq!(vad.process(&half).expect("h2").len(), 1);
     }
 
     #[test]
-    fn process_splits_multi_frame_input() {
+    fn reset_returns_state_to_idle() {
         let mut vad = FgVad::new().expect("create");
-        let buf = vec![0i16; HOP_SIZE * 3 + 100]; // 3 整帧 + 尾巴
-        let out = vad.process(&buf).expect("multi");
-        assert_eq!(out.len(), 3, "应跑出 3 帧");
+        vad.start();
+        assert_eq!(vad.state(), State::Detecting);
+        vad.reset();
+        assert_eq!(vad.state(), State::Idle);
     }
 }

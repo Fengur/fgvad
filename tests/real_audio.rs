@@ -3,7 +3,7 @@
 
 #![cfg(target_os = "macos")]
 
-use fgvad::{FgVad, FrameResult};
+use fgvad::{EndReason, Event, FgVad, FrameResult, ShortModeConfig, State};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -101,6 +101,60 @@ fn run_vad_on_real_speech() {
     assert!(n_voice > 50, "期望至少 50 个语音帧，实得 {n_voice}");
     assert!(n_silence > 20, "期望至少 20 个静音帧，实得 {n_silence}");
     assert!(max_prob > 0.85, "语音段最高概率应 > 0.85，实得 {max_prob:.3}");
+}
+
+/// 跑完整的短时会话，验证 `SentenceStarted` 和 `SentenceEnded` 触发点与概率曲线一致。
+#[test]
+fn short_mode_session_on_real_speech() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/s0724-s0730.wav");
+    let samples = read_wav_16k_mono_i16(path);
+
+    // 默认配置：head=3000, tail=700, max=30000。样本里说话持续约 6.6s，
+    // 尾静音约 500ms（不够 700ms），所以真实录音里不会触发 SentenceEnded。
+    // 为了让会话在测试里正常收尾，调窄 tail。
+    let cfg = ShortModeConfig {
+        tail_silence_ms: 400,
+        ..Default::default()
+    };
+    let mut vad = FgVad::short(cfg).expect("create");
+    vad.start();
+    let frames = vad.process(&samples).expect("process");
+
+    let started_at = frames.iter().position(|f| f.event == Some(Event::SentenceStarted));
+    let ended_at = frames.iter().position(|f| f.event == Some(Event::SentenceEnded));
+
+    eprintln!(
+        "SentenceStarted at frame {:?}（{} ms）",
+        started_at,
+        started_at.map(|i| i * 16).unwrap_or(0)
+    );
+    eprintln!(
+        "SentenceEnded at frame {:?}（{} ms）",
+        ended_at,
+        ended_at.map(|i| i * 16).unwrap_or(0)
+    );
+
+    // 人工观察：概率在 frame 30 附近首次突破阈值，确认 3 帧后 -> frame 32 触发 Started
+    let started_idx = started_at.expect("应触发 SentenceStarted");
+    assert!(
+        (25..40).contains(&started_idx),
+        "SentenceStarted 应在 frame 25-40 之间，实为 {started_idx}"
+    );
+
+    // 尾静音调成 400ms（25 帧），应在语音段结束后约 25 帧触发 SentenceEnded
+    let ended_idx = ended_at.expect("应触发 SentenceEnded");
+    assert!(
+        ended_idx > started_idx,
+        "SentenceEnded 必须在 SentenceStarted 之后"
+    );
+
+    // 最后一帧应处于 End(SpeechCompleted) 状态
+    let last = frames.last().unwrap();
+    assert_eq!(last.state, State::End(EndReason::SpeechCompleted));
+
+    // 会话结束后剩余 wav 样本应被丢弃，再 process 返回空
+    let more = vad.process(&samples[..1000]).expect("post-end");
+    assert!(more.is_empty());
 }
 
 /// 打印每 10 帧一行的概率时间线，每行带概率条形图示。
