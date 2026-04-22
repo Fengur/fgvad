@@ -10,7 +10,7 @@ pub mod state_machine;
 #[cfg(target_os = "macos")]
 mod vad;
 
-pub use state_machine::{EndReason, Event, Mode, ShortModeConfig, State};
+pub use state_machine::{EndReason, Event, LongModeConfig, Mode, ShortModeConfig, State};
 
 #[cfg(target_os = "macos")]
 pub use vad::{Error, FgVad, FrameDiag, ResultType, VadResult};

@@ -13,7 +13,9 @@
 
 use std::collections::VecDeque;
 
-use crate::state_machine::{EndReason, Event, Mode, ShortModeConfig, State, StateMachine};
+use crate::state_machine::{
+    EndReason, Event, LongModeConfig, Mode, ShortModeConfig, State, StateMachine,
+};
 use crate::sys;
 
 const HOP_SIZE: usize = 256;
@@ -118,13 +120,10 @@ impl FgVad {
         if ret != 0 || handle.is_null() {
             return Err(Error::InitFailed);
         }
-        let state_machine = match mode {
-            Mode::Short(cfg) => StateMachine::new(cfg),
-        };
         Ok(Self {
             handle,
             pending: Vec::with_capacity(HOP_SIZE * 4),
-            state_machine,
+            state_machine: StateMachine::new(mode),
             pre_roll: VecDeque::with_capacity(PRE_ROLL_FRAMES),
             stream_samples: 0,
             segment: None,
@@ -133,6 +132,10 @@ impl FgVad {
 
     pub fn short(cfg: ShortModeConfig) -> Result<Self, Error> {
         Self::with_mode(Mode::Short(cfg))
+    }
+
+    pub fn long(cfg: LongModeConfig) -> Result<Self, Error> {
+        Self::with_mode(Mode::Long(cfg))
     }
 
     pub fn start(&mut self) {
@@ -194,7 +197,7 @@ impl FgVad {
             let event = self.state_machine.step(diag.is_voice);
             let new_state = self.state_machine.state();
             let prev_role = self.segment.as_ref().map(|s| s.role);
-            let new_role = role_for(new_state, prev_role);
+            let new_role = role_for(new_state, event, prev_role);
 
             let frame_offset = self.stream_samples;
 
@@ -296,8 +299,16 @@ impl FgVad {
                     let role = seg.role;
                     let state = seg.latest_state;
                     let next_offset = seg.start_offset + seg.audio.len() as u64;
+                    // 长时模式里，若本段以 SentenceEnded/ForceCut 结束，不要延续
+                    // 为下一段的起始——让下一帧（Silence）自己开 Silence 段。
+                    let ended_sentence = matches!(
+                        seg.latest_event,
+                        Some(Event::SentenceEnded) | Some(Event::SentenceForceCut)
+                    );
                     results.push(finalize_by_role(seg, false));
-                    self.segment = Some(Segment::new(role, next_offset, state));
+                    if !ended_sentence {
+                        self.segment = Some(Segment::new(role, next_offset, state));
+                    }
                 } else {
                     self.segment = Some(seg);
                 }
@@ -329,10 +340,19 @@ impl Drop for FgVad {
     }
 }
 
-/// 根据状态机状态判定帧的角色。终态要按"往哪里去"推断：
-/// SpeechCompleted 来自 Trailing（Active），HeadSilenceTimeout 来自 Detecting（Silence），
-/// MaxDurationReached / ExternalStop 继承当前段的角色。
-fn role_for(state: State, prev_role: Option<SegmentRole>) -> SegmentRole {
+/// 依状态与事件判定帧的角色。
+///
+/// 长时模式下 `SentenceEnded` / `SentenceForceCut` 事件伴随 state 回到
+/// `Detecting`，但**该帧本身是上一句的最后一帧**，语义上属 Active。
+/// 短时终态按"往哪里去"推断：SpeechCompleted 来自 Trailing（Active），
+/// HeadSilenceTimeout 来自 Detecting（Silence），其它继承当前段。
+fn role_for(state: State, event: Option<Event>, prev_role: Option<SegmentRole>) -> SegmentRole {
+    if matches!(
+        event,
+        Some(Event::SentenceEnded) | Some(Event::SentenceForceCut)
+    ) {
+        return SegmentRole::Active;
+    }
     match state {
         State::Voiced | State::Trailing => SegmentRole::Active,
         State::End(reason) => match reason {
@@ -359,11 +379,19 @@ fn finalize_silence(seg: Segment) -> VadResult {
     }
 }
 
+/// 把一个段转成 VadResult。`terminal=true` 表示会话终态；
+/// 长时模式里 `SentenceEnded` / `SentenceForceCut` 也会让 Active 段
+/// 发成 `SentenceEnd`（即便 session 未终结）。
 fn finalize_by_role(seg: Segment, terminal: bool) -> VadResult {
     match seg.role {
         SegmentRole::Silence => finalize_silence(seg),
         SegmentRole::Active => {
-            let is_end = terminal && matches!(seg.latest_state, State::End(_));
+            let ended_by_event = matches!(
+                seg.latest_event,
+                Some(Event::SentenceEnded) | Some(Event::SentenceForceCut)
+            );
+            let ended_by_terminal = terminal && matches!(seg.latest_state, State::End(_));
+            let is_end = ended_by_event || ended_by_terminal;
             VadResult {
                 audio: seg.audio,
                 result_type: if is_end {
