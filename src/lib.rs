@@ -13,7 +13,7 @@ mod vad;
 pub use state_machine::{EndReason, Event, Mode, ShortModeConfig, State};
 
 #[cfg(target_os = "macos")]
-pub use vad::{Error, FgVad, FrameResult};
+pub use vad::{Error, FgVad, FrameDiag, ResultType, VadResult};
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
