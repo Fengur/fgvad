@@ -12,3 +12,6 @@ categories = ["multimedia::audio"]
 
 [lib]
 name = "fgvad"
+
+[dependencies]
+thiserror = "1.0"
