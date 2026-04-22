@@ -1,0 +1,14 @@
+[package]
+name = "fgvad"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Intelligent VAD library — wraps ten-vad with a state machine and dynamic endpointing strategy."
+repository = "https://github.com/Fengur/fgvad"
+authors = ["Fengur"]
+readme = "README.md"
+keywords = ["vad", "voice-activity-detection", "audio", "speech"]
+categories = ["multimedia::audio"]
+
+[lib]
+name = "fgvad"
