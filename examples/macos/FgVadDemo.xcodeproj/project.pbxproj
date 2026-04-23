@@ -1,0 +1,429 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */; };
+		456FC03E85ADCD34DE7047EC /* ten_vad.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A9ACAEB7C7530B4DF776490A /* ten_vad.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		4F33CCC22749D6300102BA53 /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = FCABBCF4385BC58DD1040EAE /* SnapKit */; };
+		5A4A6FD193B2EE9A15DF1C4C /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA9E0C97B0A002F484BC171 /* Recorder.swift */; };
+		676113BC5CD36FF60B85B745 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2056A37A3F80196166027CD /* MainWindowController.swift */; };
+		ADBEE53285861F08BB66F471 /* ten_vad.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A9ACAEB7C7530B4DF776490A /* ten_vad.framework */; };
+		D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC8FC3869527CBE32A1FBCE /* WavIO.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		9297AD12FC00767B16C94547 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				456FC03E85ADCD34DE7047EC /* ten_vad.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		7C627B9D2A123A64C391AD37 /* FgVadDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FgVadDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8660703F0AB737C89F158ED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A9ACAEB7C7530B4DF776490A /* ten_vad.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ten_vad.framework; path = "../../vendor/ten-vad/macOS/ten_vad.framework"; sourceTree = "<group>"; };
+		AEA9E0C97B0A002F484BC171 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		CCC8FC3869527CBE32A1FBCE /* WavIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavIO.swift; sourceTree = "<group>"; };
+		F2056A37A3F80196166027CD /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D21903F6067603FA752DCCBD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F33CCC22749D6300102BA53 /* SnapKit in Frameworks */,
+				ADBEE53285861F08BB66F471 /* ten_vad.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		00D6AFFC9167E7E79158EB6B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				7C627B9D2A123A64C391AD37 /* FgVadDemo.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6ABAF325E65462F36987642A = {
+			isa = PBXGroup;
+			children = (
+				E17AB3B01689F9DB6F6A7163 /* FgVadDemo */,
+				C556B30B0BB56FCD480F930D /* Frameworks */,
+				00D6AFFC9167E7E79158EB6B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C556B30B0BB56FCD480F930D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A9ACAEB7C7530B4DF776490A /* ten_vad.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		E17AB3B01689F9DB6F6A7163 /* FgVadDemo */ = {
+			isa = PBXGroup;
+			children = (
+				3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */,
+				8660703F0AB737C89F158ED8 /* Info.plist */,
+				F2056A37A3F80196166027CD /* MainWindowController.swift */,
+				AEA9E0C97B0A002F484BC171 /* Recorder.swift */,
+				CCC8FC3869527CBE32A1FBCE /* WavIO.swift */,
+			);
+			path = FgVadDemo;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		6EC3898CB00E514F53E1E8F6 /* FgVadDemo */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7FE59827F9FBB3D756EDB171 /* Build configuration list for PBXNativeTarget "FgVadDemo" */;
+			buildPhases = (
+				380A8B943405B316EC30E36D /* 确保 fgvad 已构建 */,
+				71D24BB95240F048EA29D409 /* Sources */,
+				D21903F6067603FA752DCCBD /* Frameworks */,
+				9297AD12FC00767B16C94547 /* Embed Frameworks */,
+				65AEAE284BCFD8CACD9C053F /* 复制 libfgvad.dylib 到 Frameworks 并修 rpath */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FgVadDemo;
+			packageProductDependencies = (
+				FCABBCF4385BC58DD1040EAE /* SnapKit */,
+			);
+			productName = FgVadDemo;
+			productReference = 7C627B9D2A123A64C391AD37 /* FgVadDemo.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DDA59502A5DC3033FDEBEB9C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 8917B1FA341D5701F771C3C5 /* Build configuration list for PBXProject "FgVadDemo" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 6ABAF325E65462F36987642A;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				825C54572C076D326783E77F /* XCRemoteSwiftPackageReference "SnapKit" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 00D6AFFC9167E7E79158EB6B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6EC3898CB00E514F53E1E8F6 /* FgVadDemo */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		380A8B943405B316EC30E36D /* 确保 fgvad 已构建 */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "确保 fgvad 已构建";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ncd \"$PROJECT_DIR/../..\"\ncargo build\n";
+		};
+		65AEAE284BCFD8CACD9C053F /* 复制 libfgvad.dylib 到 Frameworks 并修 rpath */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "复制 libfgvad.dylib 到 Frameworks 并修 rpath";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$FRAMEWORKS_DIR\"\ncp -f \"$PROJECT_DIR/../../target/debug/libfgvad.dylib\" \"$FRAMEWORKS_DIR/libfgvad.dylib\"\nchmod 755 \"$FRAMEWORKS_DIR/libfgvad.dylib\"\ncodesign --force --sign - \"$FRAMEWORKS_DIR/libfgvad.dylib\" || true\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		71D24BB95240F048EA29D409 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */,
+				676113BC5CD36FF60B85B745 /* MainWindowController.swift in Sources */,
+				5A4A6FD193B2EE9A15DF1C4C /* Recorder.swift in Sources */,
+				D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		19A87D77CF09B1024110E80B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		730D5E8F496B44FEC3D90C22 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		9C0AA6A95E9F62C7D38B015F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../vendor/ten-vad/macOS\"",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+				);
+				INFOPLIST_FILE = FgVadDemo/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../target/debug",
+					"$(PROJECT_DIR)/../../target/release",
+				);
+				OTHER_LDFLAGS = (
+					"-lfgvad",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.fengur.FgVadDemo;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "FgVadDemo-Bridging-Header.h";
+			};
+			name = Release;
+		};
+		E537F9ADCF9E1C62352BCEAB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../vendor/ten-vad/macOS\"",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+				);
+				INFOPLIST_FILE = FgVadDemo/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../target/debug",
+					"$(PROJECT_DIR)/../../target/release",
+				);
+				OTHER_LDFLAGS = (
+					"-lfgvad",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.fengur.FgVadDemo;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "FgVadDemo-Bridging-Header.h";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		7FE59827F9FBB3D756EDB171 /* Build configuration list for PBXNativeTarget "FgVadDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E537F9ADCF9E1C62352BCEAB /* Debug */,
+				9C0AA6A95E9F62C7D38B015F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8917B1FA341D5701F771C3C5 /* Build configuration list for PBXProject "FgVadDemo" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				730D5E8F496B44FEC3D90C22 /* Debug */,
+				19A87D77CF09B1024110E80B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		825C54572C076D326783E77F /* XCRemoteSwiftPackageReference "SnapKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/SnapKit/SnapKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FCABBCF4385BC58DD1040EAE /* SnapKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 825C54572C076D326783E77F /* XCRemoteSwiftPackageReference "SnapKit" */;
+			productName = SnapKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DDA59502A5DC3033FDEBEB9C /* Project object */;
+}
