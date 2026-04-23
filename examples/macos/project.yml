@@ -1,0 +1,61 @@
+name: FgVadDemo
+options:
+  bundleIdPrefix: com.fengur
+  deploymentTarget:
+    macOS: "13.0"
+  createIntermediateGroups: true
+
+packages:
+  SnapKit:
+    url: https://github.com/SnapKit/SnapKit
+    from: "5.7.0"
+
+targets:
+  FgVadDemo:
+    type: application
+    platform: macOS
+    dependencies:
+      - package: SnapKit
+      - framework: ../../vendor/ten-vad/macOS/ten_vad.framework
+        embed: true
+        codeSign: true
+    info:
+      path: FgVadDemo/Info.plist
+      properties:
+        CFBundleName: FgVadDemo
+        CFBundleShortVersionString: "0.1.0"
+        NSMicrophoneUsageDescription: "FgVadDemo 需要麦克风权限来录音并对 VAD 进行测试。"
+        NSPrincipalClass: NSApplication
+    sources:
+      - path: FgVadDemo
+    settings:
+      base:
+        SWIFT_OBJC_BRIDGING_HEADER: FgVadDemo-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(PROJECT_DIR)/../../include
+        LIBRARY_SEARCH_PATHS:
+          - $(PROJECT_DIR)/../../target/debug
+          - $(PROJECT_DIR)/../../target/release
+        OTHER_LDFLAGS:
+          - -lfgvad
+        LD_RUNPATH_SEARCH_PATHS:
+          - "@executable_path/../Frameworks"
+        # 允许非签名的 dylib（开发期用 cargo 产出的 libfgvad.dylib）
+        ENABLE_HARDENED_RUNTIME: "NO"
+    preBuildScripts:
+      - name: "确保 fgvad 已构建"
+        script: |
+          set -e
+          cd "$PROJECT_DIR/../.."
+          cargo build
+        basedOnDependencyAnalysis: false
+    postBuildScripts:
+      - name: "复制 libfgvad.dylib 到 Frameworks 并修 rpath"
+        script: |
+          set -e
+          FRAMEWORKS_DIR="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
+          mkdir -p "$FRAMEWORKS_DIR"
+          cp -f "$PROJECT_DIR/../../target/debug/libfgvad.dylib" "$FRAMEWORKS_DIR/libfgvad.dylib"
+          chmod 755 "$FRAMEWORKS_DIR/libfgvad.dylib"
+          codesign --force --sign - "$FRAMEWORKS_DIR/libfgvad.dylib" || true
+        basedOnDependencyAnalysis: false
