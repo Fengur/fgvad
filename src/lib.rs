@@ -3,12 +3,15 @@
 //! 在 ten-vad 之上叠加状态机和动态端点策略。目前仅实现短时模式。
 
 #[cfg(target_os = "macos")]
-pub mod sys;
+pub(crate) mod sys;
 
 pub mod state_machine;
 
 #[cfg(target_os = "macos")]
 mod vad;
+
+#[cfg(target_os = "macos")]
+pub mod ffi;
 
 pub use state_machine::{EndReason, Event, LongModeConfig, Mode, ShortModeConfig, State};
 
