@@ -166,7 +166,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\ncd \"$PROJECT_DIR/../..\"\ncargo build\n";
+			shellScript = "set -e\n# Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径\nexport PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"error: 找不到 cargo。请确保 rustup 已安装（https://rustup.rs）。\" >&2\n  exit 1\nfi\ncd \"$PROJECT_DIR/../..\"\ncargo build\n";
 		};
 		65AEAE284BCFD8CACD9C053F /* 复制 libfgvad.dylib 到 Frameworks 并修 rpath */ = {
 			isa = PBXShellScriptBuildPhase;

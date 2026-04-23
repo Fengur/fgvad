@@ -46,6 +46,12 @@ targets:
       - name: "确保 fgvad 已构建"
         script: |
           set -e
+          # Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径
+          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v cargo >/dev/null 2>&1; then
+            echo "error: 找不到 cargo。请确保 rustup 已安装（https://rustup.rs）。" >&2
+            exit 1
+          fi
           cd "$PROJECT_DIR/../.."
           cargo build
         basedOnDependencyAnalysis: false
