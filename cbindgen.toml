@@ -1,0 +1,16 @@
+language = "C"
+include_guard = "FGVAD_H"
+pragma_once = false
+header = "/*\n * fgvad C API\n * 自动生成 by cbindgen —— 请勿手工修改。\n */"
+cpp_compat = true
+style = "both"
+sys_includes = ["stdint.h", "stddef.h", "stdbool.h"]
+no_includes = true
+
+[export]
+include = ["FgVad", "FgVadResults", "FgVadResultView", "FgVadResultType", "FgVadState", "FgVadEndReason", "FgVadEvent"]
+exclude = ["ten_vad_create", "ten_vad_process", "ten_vad_destroy", "ten_vad_get_version", "TenVadHandle"]
+
+[enum]
+prefix_with_name = true
+rename_variants = "None"

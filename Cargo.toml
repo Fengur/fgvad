@@ -12,6 +12,10 @@ categories = ["multimedia::audio"]
 
 [lib]
 name = "fgvad"
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 thiserror = "1.0"
+
+[build-dependencies]
+cbindgen = "0.27"
