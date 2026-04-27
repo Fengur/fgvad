@@ -11,8 +11,27 @@ const HOP_SAMPLES: u32 = 256;
 /// 每帧时长（毫秒）：`256 * 1000 / 16_000 = 16`。
 pub(crate) const FRAME_MS: u32 = HOP_SAMPLES * 1000 / SAMPLE_RATE;
 
-/// `Started → Voiced` 所需的连续语音帧数（含触发帧）。3 帧 ≈ 48 ms。
-const CONFIRM_FRAMES: u32 = 3;
+/// `Started → Voiced` 所需的连续语音帧数（含触发帧）。
+///
+/// 16 帧 ≈ 256 ms，对齐 Silero VAD 业界默认 `min_speech_duration_ms = 250`。
+/// 早期设为 3 帧（48 ms）过短，48 ms 的宽带突发（click、AC 压缩机、键鼠）
+/// 极易连着 3 帧 prob>0.5 而误触发；256 ms 对真·说话来说毫无感觉，对瞬时
+/// 噪声则是坚硬过滤。
+///
+/// 参考：silero-vad `utils_vad.py::get_speech_timestamps`。
+pub(crate) const CONFIRM_FRAMES: u32 = 16;
+
+/// `Trailing → Voiced` 所需的**连续**语音帧数（多帧投票回退）。
+///
+/// 5 帧 ≈ 80 ms。Trailing 态的 tail_silence 计数器原先在任何单帧 is_voice=true
+/// 时都会被清零，导致低信噪比环境（底噪 −50 dBFS）里 ten-vad 偶发 prob>0.5
+/// 尖峰持续打断 tail 累积，说完一句要等 ~10s 才断句。
+///
+/// 加上这个：只有连续 5 帧都判为语音才认为真的恢复说话，回 Voiced；
+/// 中间任何一帧静音都会把 resume 计数清零，同时 tail_silence 计数**继续累积**
+/// 不被重置。单帧或双帧偶发尖峰被过滤掉，真实说话的持续 voice 信号（数百 ms）
+/// 轻松越过 80 ms 的门槛。
+pub(crate) const RESUME_CONFIRM_FRAMES: u32 = 5;
 
 // ———————— 公开配置 ————————
 
@@ -209,6 +228,8 @@ pub(crate) struct ShortStateMachine {
     detecting_silent_frames: u32,
     started_voice_frames: u32,
     trailing_silent_frames: u32,
+    /// Trailing 中累计的"连续 voice 帧数"——用于多帧投票回 Voiced。
+    trailing_resume_voice_frames: u32,
     session_frames: u32,
 }
 
@@ -220,6 +241,7 @@ impl ShortStateMachine {
             detecting_silent_frames: 0,
             started_voice_frames: 0,
             trailing_silent_frames: 0,
+            trailing_resume_voice_frames: 0,
             session_frames: 0,
         }
     }
@@ -244,6 +266,7 @@ impl ShortStateMachine {
         self.detecting_silent_frames = 0;
         self.started_voice_frames = 0;
         self.trailing_silent_frames = 0;
+        self.trailing_resume_voice_frames = 0;
         self.session_frames = 0;
     }
 
@@ -296,15 +319,24 @@ impl ShortStateMachine {
                 if !is_voice {
                     self.state = State::Trailing;
                     self.trailing_silent_frames = 1;
+                    self.trailing_resume_voice_frames = 0;
                 }
                 None
             }
             State::Trailing => {
                 if is_voice {
-                    self.state = State::Voiced;
-                    self.trailing_silent_frames = 0;
+                    self.trailing_resume_voice_frames += 1;
+                    if self.trailing_resume_voice_frames >= RESUME_CONFIRM_FRAMES {
+                        // 连续 N 帧 voice 确认真的恢复说话，回 Voiced
+                        self.state = State::Voiced;
+                        self.trailing_silent_frames = 0;
+                        self.trailing_resume_voice_frames = 0;
+                    }
+                    // 否则：可能是单帧 spike；tail_silent_frames 不清零，继续累积
                     None
                 } else {
+                    // 静音帧：打断 resume 连续性，tail 计数继续涨
+                    self.trailing_resume_voice_frames = 0;
                     self.trailing_silent_frames += 1;
                     let tail_frames = ms_to_frames(self.config.tail_silence_ms);
                     if self.trailing_silent_frames >= tail_frames {
@@ -328,6 +360,8 @@ pub(crate) struct LongStateMachine {
     detecting_silent_frames: u32,
     started_voice_frames: u32,
     trailing_silent_frames: u32,
+    /// Trailing 中累计的"连续 voice 帧数"——用于多帧投票回 Voiced。
+    trailing_resume_voice_frames: u32,
     session_frames: u32,
     /// 自本句 SentenceStarted 起累计的帧数（Voiced + Trailing 全算）。
     /// 动态 tail 曲线和 SentenceForceCut 都靠它。每次 SentenceEnded /
@@ -345,6 +379,7 @@ impl LongStateMachine {
             detecting_silent_frames: 0,
             started_voice_frames: 0,
             trailing_silent_frames: 0,
+            trailing_resume_voice_frames: 0,
             session_frames: 0,
             current_sentence_frames: 0,
             has_seen_any_sentence: false,
@@ -373,6 +408,7 @@ impl LongStateMachine {
         self.detecting_silent_frames = 0;
         self.started_voice_frames = 0;
         self.trailing_silent_frames = 0;
+        self.trailing_resume_voice_frames = 0;
         self.session_frames = 0;
         self.current_sentence_frames = 0;
     }
@@ -380,6 +416,7 @@ impl LongStateMachine {
     fn clear_per_sentence(&mut self) {
         self.started_voice_frames = 0;
         self.trailing_silent_frames = 0;
+        self.trailing_resume_voice_frames = 0;
         self.current_sentence_frames = 0;
         self.detecting_silent_frames = 0;
     }
@@ -459,6 +496,7 @@ impl LongStateMachine {
                 if !is_voice {
                     self.state = State::Trailing;
                     self.trailing_silent_frames = 1;
+                    self.trailing_resume_voice_frames = 0;
                 }
                 None
             }
@@ -472,10 +510,18 @@ impl LongStateMachine {
                     return Some(Event::SentenceForceCut);
                 }
                 if is_voice {
-                    self.state = State::Voiced;
-                    self.trailing_silent_frames = 0;
+                    self.trailing_resume_voice_frames += 1;
+                    if self.trailing_resume_voice_frames >= RESUME_CONFIRM_FRAMES {
+                        // 连续 N 帧 voice 确认真的恢复说话，回 Voiced
+                        self.state = State::Voiced;
+                        self.trailing_silent_frames = 0;
+                        self.trailing_resume_voice_frames = 0;
+                    }
+                    // 否则：可能是单帧 spike；tail 计数不清零
                     return None;
                 }
+                // 静音帧：打断 resume 连续性，tail 计数继续涨
+                self.trailing_resume_voice_frames = 0;
                 self.trailing_silent_frames += 1;
                 let tail_frames = self.current_tail_frames();
                 if self.trailing_silent_frames >= tail_frames {
@@ -549,9 +595,15 @@ mod short_tests {
     fn confirmation_frames_then_sentence_started() {
         let mut s = sm(Default::default());
         s.start();
+        // 第 1 帧：Detecting -> Started
         assert_eq!(s.step(true), None);
         assert_eq!(s.state, State::Started);
-        assert_eq!(s.step(true), None);
+        // 中间帧：保持 Started，不发事件
+        for _ in 0..(CONFIRM_FRAMES as usize - 2) {
+            assert_eq!(s.step(true), None);
+            assert_eq!(s.state, State::Started);
+        }
+        // 最后一帧（第 CONFIRM_FRAMES 帧）：SentenceStarted -> Voiced
         assert_eq!(s.step(true), Some(Event::SentenceStarted));
         assert_eq!(s.state, State::Voiced);
     }
@@ -563,19 +615,57 @@ mod short_tests {
         s.step(true);
         s.step(false);
         assert_eq!(s.state, State::Detecting);
-        let events = feed(&mut s, &[true, true, true]);
-        assert_eq!(events[2], Some(Event::SentenceStarted));
+        let mut last = None;
+        for _ in 0..CONFIRM_FRAMES {
+            last = s.step(true);
+        }
+        assert_eq!(last, Some(Event::SentenceStarted));
     }
 
     #[test]
     fn voiced_to_trailing_and_back() {
         let mut s = sm(Default::default());
         s.start();
-        feed(&mut s, &[true, true, true]);
+        for _ in 0..CONFIRM_FRAMES {
+            s.step(true);
+        }
         s.step(false);
         assert_eq!(s.state, State::Trailing);
+        // 单帧 voice 不再回 Voiced（防 spike 误回退）
         s.step(true);
+        assert_eq!(s.state, State::Trailing);
+        // 要攒够 RESUME_CONFIRM_FRAMES 帧才真的回
+        for _ in 0..RESUME_CONFIRM_FRAMES - 1 {
+            s.step(true);
+        }
         assert_eq!(s.state, State::Voiced);
+    }
+
+    #[test]
+    fn single_voice_spike_during_trailing_does_not_reset_counter() {
+        // 回归：噪声环境里单帧 spike 不能把 tail_silence 计数清零
+        let cfg = ShortModeConfig {
+            tail_silence_ms: 100, // 7 帧
+            ..Default::default()
+        };
+        let mut s = sm(cfg);
+        s.start();
+        for _ in 0..CONFIRM_FRAMES {
+            s.step(true);
+        }
+        // 静音 3 帧 → silent_frames=3
+        for _ in 0..3 {
+            s.step(false);
+        }
+        // 单帧 spike（本应打断 resume，但不清零 tail）
+        s.step(true);
+        assert_eq!(s.state, State::Trailing);
+        // 再 4 帧静音 —— 累积到 7 帧 = 100ms tail，应触发 SentenceEnded
+        let mut last = None;
+        for _ in 0..4 {
+            last = s.step(false);
+        }
+        assert_eq!(last, Some(Event::SentenceEnded));
     }
 
     #[test]
@@ -586,7 +676,9 @@ mod short_tests {
         };
         let mut s = sm(cfg);
         s.start();
-        feed(&mut s, &[true, true, true]);
+        for _ in 0..CONFIRM_FRAMES {
+            s.step(true);
+        }
         let events: Vec<_> = (0..7).map(|_| s.step(false)).collect();
         assert_eq!(events[6], Some(Event::SentenceEnded));
         assert_eq!(s.state, State::End(EndReason::SpeechCompleted));
@@ -644,8 +736,8 @@ mod long_tests {
         };
         let mut s = sm(cfg);
         s.start();
-        // 3 帧确认开口 -> Voiced
-        for _ in 0..3 {
+        // CONFIRM_FRAMES 帧确认开口 -> Voiced
+        for _ in 0..CONFIRM_FRAMES {
             s.step(true);
         }
         assert_eq!(s.state, State::Voiced);
@@ -681,15 +773,15 @@ mod long_tests {
                 }
             }
         };
-        // 第 1 句：3 帧语音 + 7 帧静音
-        for _ in 0..3 {
+        // 第 1 句：CONFIRM_FRAMES 帧语音 + 7 帧静音
+        for _ in 0..CONFIRM_FRAMES {
             feed(&mut s, true);
         }
         for _ in 0..7 {
             feed(&mut s, false);
         }
-        // 第 2 句：3 帧语音 + 7 帧静音
-        for _ in 0..3 {
+        // 第 2 句：CONFIRM_FRAMES 帧语音 + 7 帧静音
+        for _ in 0..CONFIRM_FRAMES {
             feed(&mut s, true);
         }
         for _ in 0..7 {
@@ -713,8 +805,8 @@ mod long_tests {
         };
         let mut s = sm(cfg);
         s.start();
-        // 首句：3 voice + 7 silent -> SentenceEnded
-        for _ in 0..3 {
+        // 首句：CONFIRM_FRAMES voice + 7 silent -> SentenceEnded
+        for _ in 0..CONFIRM_FRAMES {
             s.step(true);
         }
         for _ in 0..7 {
@@ -774,8 +866,9 @@ mod long_tests {
     /// 单句强切：超过 max_sentence_duration 时发 SentenceForceCut，state 回 Detecting。
     #[test]
     fn sentence_force_cut_fires() {
+        // max 必须比 CONFIRM_FRAMES 对应时长大，否则永远进不了 Voiced 就被强切了
         let cfg = LongModeConfig {
-            max_sentence_duration_ms: 100, // 7 帧
+            max_sentence_duration_ms: 500, // 32 帧，> CONFIRM_FRAMES
             tail_silence_ms_initial: 10_000,
             tail_silence_ms_min: 10_000,
             enable_dynamic_tail: false,
@@ -783,14 +876,9 @@ mod long_tests {
         };
         let mut s = sm(cfg);
         s.start();
-        // 持续说话直到撞 max_sentence
-        for _ in 0..3 {
-            s.step(true); // -> Started/Voiced（第 3 帧 SentenceStarted）
-        }
-        // 这里 current_sentence_frames = 3
-        // 再 4 帧 voice，到 7 帧触发强切
+        // 持续 true 直到撞 max_sentence
         let mut force_cut_seen = false;
-        for _ in 0..10 {
+        for _ in 0..200 {
             if let Some(Event::SentenceForceCut) = s.step(true) {
                 force_cut_seen = true;
                 break;
