@@ -181,7 +181,7 @@ final class MainWindowController: NSWindowController {
         longConfigBox.title = "长时参数 · 单位 ms(max_session=0 表示不限)"
         let longGrid = Self.configRows([
             ("head_silence_timeout",
-             "按下录音后，多久没听到说话就放弃",
+             "多久没听到说话就吐一次通知事件 · 只提示、不结束会话",
              longHead),
             ("max_sentence_duration",
              "单句最长时长；超了强制切一句，防一口气说太长",

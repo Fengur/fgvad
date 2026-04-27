@@ -73,6 +73,11 @@ impl Default for ShortModeConfig {
 pub struct LongModeConfig {
     /// 头部静音超时（ms）。**仅在首次开口前生效**；一旦说过一句，此后
     /// 句间无限静音都不会触发。0 表示禁用。
+    ///
+    /// **长时语义**：到点后**只吐 `Event::HeadSilenceTimeout` 通知事件**，
+    /// state 仍保持 `Detecting`、会话不结束。consumer 可用此事件做"还在吗？"
+    /// 之类的交互提示；会话只通过 `stop()` 或 `max_session_duration_ms` 结束。
+    /// 每隔 `head_silence_timeout_ms` 会再吐一次，直到首次开口后彻底失效。
     pub head_silence_timeout_ms: u32,
 
     /// **单句最大时长**（ms）。兼做两件事：
@@ -456,11 +461,16 @@ impl LongStateMachine {
                     None
                 } else {
                     self.detecting_silent_frames += 1;
-                    // 头部超时仅首次开口前有效
+                    // 长时模式下 head_silence_timeout 只是**通知事件**——consumer
+                    // 可以用它提示"还在吗？"之类，但**不结束会话**。长时的语义
+                    // 是"支持长时间工作，只认 stop() 或 max_session"。
+                    //
+                    // 只在第一句之前、且 head_timeout > 0 时吐一次事件；
+                    // 吐过以后重置计数器以允许再次吐（每隔 head_timeout 提示一次）。
                     if !self.has_seen_any_sentence && self.config.head_silence_timeout_ms > 0 {
                         let head_frames = ms_to_frames(self.config.head_silence_timeout_ms);
                         if self.detecting_silent_frames >= head_frames {
-                            self.state = State::End(EndReason::HeadSilenceTimeout);
+                            self.detecting_silent_frames = 0;
                             return Some(Event::HeadSilenceTimeout);
                         }
                     }
@@ -821,18 +831,30 @@ mod long_tests {
         assert_eq!(s.state, State::Detecting);
     }
 
-    /// 长时：首次开口前超时确实会触发。
+    /// 长时：首次开口前 head_timeout 到点**只吐通知事件**,不结束会话。
+    /// 长时的语义是"支持长时间工作，只认 stop() 或 max_session"。
     #[test]
-    fn head_timeout_before_first_sentence_fires() {
+    fn head_timeout_before_first_sentence_is_notification_only() {
         let cfg = LongModeConfig {
-            head_silence_timeout_ms: 100,
+            head_silence_timeout_ms: 100, // 7 帧
+            max_session_duration_ms: 0,
             ..Default::default()
         };
         let mut s = sm(cfg);
         s.start();
+        // 第 7 帧吐 HeadSilenceTimeout,但 state 保持 Detecting
         let events: Vec<_> = (0..7).map(|_| s.step(false)).collect();
         assert_eq!(events[6], Some(Event::HeadSilenceTimeout));
-        assert_eq!(s.state, State::End(EndReason::HeadSilenceTimeout));
+        assert_eq!(s.state, State::Detecting);
+        // 再 7 帧静音应再吐一次（周期性提示）
+        let more: Vec<_> = (0..7).map(|_| s.step(false)).collect();
+        assert_eq!(more[6], Some(Event::HeadSilenceTimeout));
+        assert_eq!(s.state, State::Detecting);
+        // 之后依然可以正常开口进 Voiced
+        for _ in 0..CONFIRM_FRAMES {
+            s.step(true);
+        }
+        assert_eq!(s.state, State::Voiced);
     }
 
     /// 动态 tail 曲线：句子越久，所需 tail 帧数越小。
