@@ -12,8 +12,11 @@
 		4F33CCC22749D6300102BA53 /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = FCABBCF4385BC58DD1040EAE /* SnapKit */; };
 		5A4A6FD193B2EE9A15DF1C4C /* Recorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEA9E0C97B0A002F484BC171 /* Recorder.swift */; };
 		676113BC5CD36FF60B85B745 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2056A37A3F80196166027CD /* MainWindowController.swift */; };
+		A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */; };
 		ADBEE53285861F08BB66F471 /* ten_vad.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A9ACAEB7C7530B4DF776490A /* ten_vad.framework */; };
+		BBD924F44EEB3F9E083C7F6D /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = B091D45B0FD8F4F9A84851FF /* main.swift */; };
 		D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC8FC3869527CBE32A1FBCE /* WavIO.swift */; };
+		EC3B4ABA2C25650CF097DBD8 /* DemoLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CF9EE8D2937A1E646CDC1A5 /* DemoLog.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -34,8 +37,11 @@
 		3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		7C627B9D2A123A64C391AD37 /* FgVadDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FgVadDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8660703F0AB737C89F158ED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		9CF9EE8D2937A1E646CDC1A5 /* DemoLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoLog.swift; sourceTree = "<group>"; };
 		A9ACAEB7C7530B4DF776490A /* ten_vad.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ten_vad.framework; path = "../../vendor/ten-vad/macOS/ten_vad.framework"; sourceTree = "<group>"; };
 		AEA9E0C97B0A002F484BC171 /* Recorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Recorder.swift; sourceTree = "<group>"; };
+		B091D45B0FD8F4F9A84851FF /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FgVadAnalyzer.swift; sourceTree = "<group>"; };
 		CCC8FC3869527CBE32A1FBCE /* WavIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavIO.swift; sourceTree = "<group>"; };
 		F2056A37A3F80196166027CD /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -82,7 +88,10 @@
 			isa = PBXGroup;
 			children = (
 				3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */,
+				9CF9EE8D2937A1E646CDC1A5 /* DemoLog.swift */,
+				B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */,
 				8660703F0AB737C89F158ED8 /* Info.plist */,
+				B091D45B0FD8F4F9A84851FF /* main.swift */,
 				F2056A37A3F80196166027CD /* MainWindowController.swift */,
 				AEA9E0C97B0A002F484BC171 /* Recorder.swift */,
 				CCC8FC3869527CBE32A1FBCE /* WavIO.swift */,
@@ -195,9 +204,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */,
+				EC3B4ABA2C25650CF097DBD8 /* DemoLog.swift in Sources */,
+				A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */,
 				676113BC5CD36FF60B85B745 /* MainWindowController.swift in Sources */,
 				5A4A6FD193B2EE9A15DF1C4C /* Recorder.swift in Sources */,
 				D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */,
+				BBD924F44EEB3F9E083C7F6D /* main.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
