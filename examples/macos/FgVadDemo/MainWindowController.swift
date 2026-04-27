@@ -587,12 +587,18 @@ final class CardView: NSView {
 
     init() {
         super.init(frame: .zero)
+        // 强制这棵子树走 aqua —— init 阶段还没进 view hierarchy，如果不显式设，
+        // 系统 dark mode 用户会看到 `.secondaryLabelColor` 等 dynamic 色按 dark
+        // 解析，导致标题文字浅灰、难看清。
+        appearance = NSAppearance(named: .aqua)
         wantsLayer = true
-        // 白底 + 细边框，在窗口的浅灰背景上清晰浮起(macOS 系统设置风格)
-        layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        // layer 的背景/边框用硬编码，不走 dynamic 色的 .cgColor 提取 —— 因为
+        // CGColor 是从当前线程 drawing context 的 appearance 提取的静态值，
+        // init 时 detach 状态下往往拿到系统 appearance (dark) 下的深色。
+        layer?.backgroundColor = NSColor.white.cgColor
         layer?.cornerRadius = 10
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.separatorColor.cgColor
+        layer?.borderColor = NSColor(white: 0, alpha: 0.1).cgColor
 
         titleLabel.font = .systemFont(ofSize: 11, weight: .semibold)
         titleLabel.textColor = .secondaryLabelColor
