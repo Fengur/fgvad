@@ -2,8 +2,10 @@ language = "C"
 include_guard = "FGVAD_H"
 pragma_once = false
 header = "/*\n * fgvad C API\n * 自动生成 by cbindgen —— 请勿手工修改。\n */"
-cpp_compat = true
-style = "both"
+# 只输出 `enum` tag（不再加 typedef），避免 Swift 看到两个同名符号报类型歧义。
+# C++ 消费者写 `enum X` / `extern "C"` 即可。
+cpp_compat = false
+style = "tag"
 sys_includes = ["stdint.h", "stddef.h", "stdbool.h"]
 no_includes = true
 
