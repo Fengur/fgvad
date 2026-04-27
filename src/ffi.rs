@@ -19,7 +19,7 @@ use crate::vad::{FgVad as RustFgVad, ResultType as RustResultType, VadResult};
 
 // ———————— 公开给 C 的枚举（都用 u32） ————————
 
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum FgVadResultType {
     Silence = 0,
@@ -28,7 +28,7 @@ pub enum FgVadResultType {
     SentenceEnd = 3,
 }
 
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum FgVadState {
     Idle = 0,
@@ -40,7 +40,7 @@ pub enum FgVadState {
 }
 
 /// 仅当 `state == FgVadState::End` 时有意义；否则为 `None_`。
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum FgVadEndReason {
     None_ = 0,
@@ -50,7 +50,7 @@ pub enum FgVadEndReason {
     ExternalStop = 4,
 }
 
-#[repr(u32)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub enum FgVadEvent {
     None_ = 0,

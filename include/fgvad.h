@@ -13,26 +13,15 @@
 /**
  * 仅当 `state == FgVadState::End` 时有意义；否则为 `None_`。
  */
-enum FgVadEndReason
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
+enum FgVadEndReason {
   FgVadEndReason_None_ = 0,
   FgVadEndReason_SpeechCompleted = 1,
   FgVadEndReason_HeadSilenceTimeout = 2,
   FgVadEndReason_MaxDurationReached = 3,
   FgVadEndReason_ExternalStop = 4,
 };
-#ifndef __cplusplus
-typedef uint32_t FgVadEndReason;
-#endif // __cplusplus
 
-enum FgVadEvent
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
+enum FgVadEvent {
   FgVadEvent_None_ = 0,
   FgVadEvent_SentenceStarted = 1,
   FgVadEvent_SentenceEnded = 2,
@@ -40,29 +29,15 @@ enum FgVadEvent
   FgVadEvent_HeadSilenceTimeout = 4,
   FgVadEvent_MaxDurationReached = 5,
 };
-#ifndef __cplusplus
-typedef uint32_t FgVadEvent;
-#endif // __cplusplus
 
-enum FgVadResultType
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
+enum FgVadResultType {
   FgVadResultType_Silence = 0,
   FgVadResultType_SentenceStart = 1,
   FgVadResultType_Active = 2,
   FgVadResultType_SentenceEnd = 3,
 };
-#ifndef __cplusplus
-typedef uint32_t FgVadResultType;
-#endif // __cplusplus
 
-enum FgVadState
-#ifdef __cplusplus
-  : uint32_t
-#endif // __cplusplus
- {
+enum FgVadState {
   FgVadState_Idle = 0,
   FgVadState_Detecting = 1,
   FgVadState_Started = 2,
@@ -70,28 +45,25 @@ enum FgVadState
   FgVadState_Trailing = 4,
   FgVadState_End = 5,
 };
-#ifndef __cplusplus
-typedef uint32_t FgVadState;
-#endif // __cplusplus
 
-typedef struct FgVad FgVad;
+struct FgVad;
 
 /**
  * opaque 句柄（C 里只以 `struct FgVad *` 形式出现）。
  */
-typedef struct FgVad FgVad;
+struct FgVad;
 
 /**
  * opaque 结果集，内部持有 `Vec<VadResult>` 与逐帧概率 / is_voice 的 SoA 缓存
  * （方便 C 侧直接拿连续指针画波形）。
  */
-typedef struct FgVadResults FgVadResults;
+struct FgVadResults;
 
 /**
  * 一条结果的只读视图。指针生命周期绑定 `FgVadResults`。
  */
-typedef struct FgVadResultView {
-  FgVadResultType result_type;
+struct FgVadResultView {
+  enum FgVadResultType result_type;
   /**
    * 本段音频起始指针（Silence 段可能为空——此时 ptr 为空、len=0）。
    */
@@ -106,17 +78,13 @@ typedef struct FgVadResultView {
    */
   const uint8_t *is_voice_ptr;
   uintptr_t frames_count;
-  FgVadEvent event;
-  FgVadState state;
-  FgVadEndReason end_reason;
+  enum FgVadEvent event;
+  enum FgVadState state;
+  enum FgVadEndReason end_reason;
   bool is_sentence_begin;
   bool is_sentence_end;
   uint64_t stream_offset_sample;
-} FgVadResultView;
-
-#ifdef __cplusplus
-extern "C" {
-#endif // __cplusplus
+};
 
 /**
  * 创建短时模式实例。失败返回 NULL。
@@ -151,12 +119,12 @@ void fgvad_reset(struct FgVad *vad);
 /**
  * 查询当前状态机状态。NULL 返回 `Idle`。
  */
-FgVadState fgvad_state(const struct FgVad *vad);
+enum FgVadState fgvad_state(const struct FgVad *vad);
 
 /**
  * 查询终态原因（仅 `state == End` 时有意义）。
  */
-FgVadEndReason fgvad_end_reason(const struct FgVad *vad);
+enum FgVadEndReason fgvad_end_reason(const struct FgVad *vad);
 
 /**
  * 喂入 16 kHz mono i16 PCM。返回一个 opaque 结果集；
@@ -178,9 +146,5 @@ uintptr_t fgvad_results_count(const struct FgVadResults *results);
  */
 struct FgVadResultView fgvad_result_view(const struct FgVadResults *results,
                                          uintptr_t index);
-
-#ifdef __cplusplus
-}  // extern "C"
-#endif  // __cplusplus
 
 #endif  /* FGVAD_H */
