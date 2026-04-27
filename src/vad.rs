@@ -19,6 +19,9 @@ use crate::state_machine::{
 use crate::sys;
 
 const HOP_SIZE: usize = 256;
+/// ten-vad / Silero 业界默认 —— prob > THRESHOLD 即候选 voice 帧。
+/// 噪声环境下对 pop 尖峰的抗性**不靠调这个值**，而是靠状态机层的多帧回退投票
+/// (`RESUME_CONFIRM_FRAMES`)，防止单帧 spike 打乱 tail_silence 累积。
 const THRESHOLD: f32 = 0.5;
 /// pre-roll 帧数：对应 250ms（`ceil(250 / 16) = 16`）。
 const PRE_ROLL_FRAMES: usize = 16;
