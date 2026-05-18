@@ -136,6 +136,26 @@ max_duration)`。完整 API 见 [`include/fgvad.h`](./include/fgvad.h)。
 [`test-data/long/README.md`](./test-data/long/README.md) 和
 [`test-data/short/README.md`](./test-data/short/README.md)。
 
+## 测试
+
+`cargo test` 跑全套 49 个测试（含 unit + 集成两层）：
+
+| 测试文件 | 数量 | 内容 |
+|---------|------|------|
+| `src/lib.rs` (`#[test]`) | 32 | 状态机 / 动态曲线 / FFI 等单元测试 |
+| `tests/real_audio.rs` | 4 | 短时模式端到端（ten-vad 官方 fixture） |
+| `tests/long_mode.rs` | 4 | 长时模式 + ForceCut + ExternalStop |
+| `tests/short_mode_cases.rs` | 6 | 短时 6 个合成 case 一一断言 endReason |
+| `tests/long_mode_yixi.rs` | 3 | 长时动态曲线对照实验（25 分钟一席演讲）|
+
+最关键的契约级断言是 `dynamic_curve_substantially_reduces_force_cut_ratio`
+——若动态曲线公式被改坏，ON 模式 ForceCut 占比会超 10% 或不再显著低于
+OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
+85/5 vs 53/46 表里的设计意图。
+
+性能：yixi 长时 3 个测试需要每次把 24M sample 喂进 ten-vad，单线程
+~2-3 分钟；其他全部秒级。CI 上跑完整 cargo test 可接受。
+
 ## 鲁棒性参数（已对齐业界）
 
 | 参数 | 值 | 说明 |
