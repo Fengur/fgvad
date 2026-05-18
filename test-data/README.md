@@ -21,15 +21,19 @@ test-data/
 
 ## short/
 
-适合验证：head_silence_timeout 行为、tail_silence 灵敏度、SpeechCompleted vs MaxDurationReached 终止路径。
+合成测试集，覆盖短时模式 3 条 endReason 路径 + 2 个边界情形：
 
-理想素材的特征：
-- 时长 5-30 秒
-- 起始有 0.5-2 秒头部静音（验证 head_silence_timeout 行为）
-- 单段连续语音（命令/查询式，如"打开支付宝"、"明天上午 10 点提醒我开会"）
-- 末尾有 1-3 秒尾静音（验证正常 SpeechCompleted 路径）
+| 文件 | 验证目标 |
+|------|----------|
+| `01-pure-silence-5s.wav` | HeadSilenceTimeout |
+| `02-normal-utterance.wav` | SpeechCompleted（标准路径） |
+| `03-immediate-speech.wav` | SpeechCompleted（无头静音） |
+| `04-max-duration-reached.wav` | MaxDurationReached |
+| `05-short-pauses-merged.wav` | 短停顿不切句、整段合并 |
+| `06-very-brief-speech.wav` | CONFIRM_FRAMES 边界（0.3s 语音是否够触发 SentenceStarted） |
 
-暂未入库样本，待补充。
+详见 [`short/README.md`](short/README.md)，包含每个 case 的构成、预期 endReason、
+以及一键再生成脚本。
 
 ## 添加新样本的注意事项
 
