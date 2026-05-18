@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import SnapKit
 
 /// 主窗口：顶部 mode toggle、config 表单、录音/重跑按钮、状态显示。
@@ -49,6 +50,21 @@ final class MainWindowController: NSWindowController {
     private let versionLabel = NSTextField(
         labelWithString: "fgvad 0.1.0 · ten-vad")
 
+    // MARK: - Sentence list UI
+    private let sentenceCard = CardView()
+    private let sentenceListScrollView = NSScrollView()
+    private let sentenceListStack = NSStackView()
+    private let emptyListLabel = NSTextField(labelWithString: "暂无句子")
+
+    // MARK: - Sentence tracking state
+    private var sentenceRecords: [SentenceRecord] = []
+    private var currentSentenceStartSample: UInt64? = nil
+    private var lastWavURL: URL? = nil
+    private var audioPlayer: AVAudioPlayer? = nil
+
+    // MARK: - Status stack (stored for constraint chaining)
+    private let statusStack = NSStackView()
+
     // MARK: - Recording timer
     private var recordingStartDate: Date?
     private var tickTimer: Timer?
@@ -57,7 +73,7 @@ final class MainWindowController: NSWindowController {
     init() {
         DemoLog.log("MainWindowController.init")
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 680, height: 740),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false)
@@ -141,8 +157,9 @@ final class MainWindowController: NSWindowController {
         lastFileLabel.textColor = .tertiaryLabelColor
         lastFileLabel.maximumNumberOfLines = 1
         lastFileLabel.lineBreakMode = .byTruncatingMiddle
-        let statusStack = NSStackView(
-            views: [statusLabel, liveStateLabel, lastFileLabel])
+        statusStack.addArrangedSubview(statusLabel)
+        statusStack.addArrangedSubview(liveStateLabel)
+        statusStack.addArrangedSubview(lastFileLabel)
         statusStack.orientation = .vertical
         statusStack.alignment = .centerX
         statusStack.spacing = 4
@@ -151,6 +168,8 @@ final class MainWindowController: NSWindowController {
             make.top.equalTo(buttonsRow.snp.bottom).offset(18)
             make.leading.trailing.equalToSuperview().inset(24)
         }
+
+        setupSentenceList(content)
 
         versionLabel.alignment = .center
         versionLabel.font = .systemFont(ofSize: 10)
@@ -220,6 +239,52 @@ final class MainWindowController: NSWindowController {
         configStack.snp.makeConstraints { make in
             make.top.equalTo(modeHintLabel.snp.bottom).offset(14)
             make.leading.trailing.equalToSuperview().inset(24)
+        }
+    }
+
+    private func setupSentenceList(_ content: NSView) {
+        sentenceListStack.orientation = .vertical
+        sentenceListStack.alignment = .leading
+        sentenceListStack.spacing = 2
+        sentenceListStack.translatesAutoresizingMaskIntoConstraints = false
+
+        sentenceListScrollView.documentView = sentenceListStack
+        sentenceListScrollView.hasVerticalScroller = true
+        sentenceListScrollView.drawsBackground = false
+        sentenceListScrollView.borderType = .noBorder
+
+        let clipView = sentenceListScrollView.contentView
+        NSLayoutConstraint.activate([
+            sentenceListStack.leadingAnchor.constraint(
+                equalTo: clipView.leadingAnchor, constant: 8),
+            sentenceListStack.trailingAnchor.constraint(
+                equalTo: clipView.trailingAnchor, constant: -8),
+            sentenceListStack.topAnchor.constraint(
+                equalTo: clipView.topAnchor, constant: 6),
+        ])
+
+        emptyListLabel.font = .systemFont(ofSize: 12)
+        emptyListLabel.textColor = .tertiaryLabelColor
+        emptyListLabel.alignment = .center
+
+        let listContent = NSView()
+        listContent.addSubview(sentenceListScrollView)
+        listContent.addSubview(emptyListLabel)
+        sentenceListScrollView.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        emptyListLabel.snp.makeConstraints { make in
+            make.center.equalToSuperview()
+        }
+        sentenceListScrollView.isHidden = true
+
+        sentenceCard.title = "句子列表"
+        sentenceCard.contentView = listContent
+        content.addSubview(sentenceCard)
+        sentenceCard.snp.makeConstraints { make in
+            make.top.equalTo(statusStack.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview().inset(24)
+            make.height.equalTo(180)
         }
     }
 
@@ -321,6 +386,10 @@ final class MainWindowController: NSWindowController {
         analyzer.start()
         self.analyzer = analyzer
         sentenceCount = 0
+        sentenceRecords = []
+        currentSentenceStartSample = nil
+        lastWavURL = nil
+        clearSentenceList()
 
         recorder.onChunk = { [weak self] chunk in
             self?.handleChunk(chunk)
@@ -385,17 +454,26 @@ final class MainWindowController: NSWindowController {
         _ results: [FgVadAnalyzer.Result], state: FgVadState
     ) {
         for r in results {
-            if r.event != FgVadEvent_None_, let ev = r.event.label {
+            if r.event != FgVadEvent_None_ {
                 DemoLog.log(Self.formatResult(r))
-                if r.event == FgVadEvent_SentenceStarted {
-                    sentenceCount += 1
+            }
+            if r.event == FgVadEvent_SentenceStarted {
+                sentenceCount += 1
+                currentSentenceStartSample = r.streamOffsetSample
+            } else if r.event == FgVadEvent_SentenceEnded
+                        || r.event == FgVadEvent_SentenceForceCut {
+                if let start = currentSentenceStartSample {
+                    let record = SentenceRecord(
+                        index: sentenceCount,
+                        startSample: start,
+                        endSample: r.streamOffsetSample + UInt64(r.audioLen),
+                        endEvent: r.event)
+                    sentenceRecords.append(record)
+                    addSentenceRow(record)
+                    currentSentenceStartSample = nil
                 }
-                _ = ev  // silence warning
-            } else {
-                // 非事件段（Silence / Active）每 16ms 一个，太啰嗦，不 log
             }
         }
-        // liveStateLabel 由 tickTimer 每 250ms 统一刷新，这里不抢
         _ = state
     }
 
@@ -418,6 +496,7 @@ final class MainWindowController: NSWindowController {
         let duration: Double
         do {
             let url = try recorder.stopAndSave()
+            lastWavURL = url
             duration = Double(recorder.lastRecordedSampleCount) / 16000.0
             lastFileLabel.stringValue = String(
                 format: "%.2fs · %@", duration, url.lastPathComponent)
@@ -482,9 +561,9 @@ final class MainWindowController: NSWindowController {
     private func rerunOnFile(_ url: URL) {
         statusLabel.stringValue = "读取 WAV…"
         liveStateLabel.stringValue = ""
+        clearSentenceList()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let summary: String
             do {
                 let samples = try WavIO.readMonoInt16(from: url)
                 DemoLog.log("rerun: file=\(url.lastPathComponent) "
@@ -495,21 +574,45 @@ final class MainWindowController: NSWindowController {
                 let (results, finalState, endReason) =
                     try FgVadAnalyzer.analyze(samples: samples, mode: analyzerMode)
                 var sent = 0
+                var records: [SentenceRecord] = []
+                var currentStart: UInt64? = nil
                 for (i, r) in results.enumerated() {
-                    if r.event == FgVadEvent_SentenceStarted { sent += 1 }
-                    DemoLog.log("[#\(i)] " + Self.formatResult(r))
+                    if r.event != FgVadEvent_None_ {
+                        DemoLog.log("[#\(i)] " + Self.formatResult(r))
+                    }
+                    if r.event == FgVadEvent_SentenceStarted {
+                        sent += 1
+                        currentStart = r.streamOffsetSample
+                    } else if r.event == FgVadEvent_SentenceEnded
+                                || r.event == FgVadEvent_SentenceForceCut {
+                        if let start = currentStart {
+                            records.append(SentenceRecord(
+                                index: sent,
+                                startSample: start,
+                                endSample: r.streamOffsetSample + UInt64(r.audioLen),
+                                endEvent: r.event))
+                            currentStart = nil
+                        }
+                    }
                 }
                 DemoLog.log("rerun done: \(sent) 句 finalState=\(finalState.label) "
                     + "endReason=\(endReason.label)")
-                summary = "重跑完成 · \(sent) 句 · "
+                let summary = "重跑完成 · \(sent) 句 · "
                     + "\(finalState.label)/\(endReason.label)"
+                DispatchQueue.main.async {
+                    self.lastWavURL = url
+                    self.sentenceRecords = records
+                    for rec in records { self.addSentenceRow(rec) }
+                    self.statusLabel.stringValue = summary
+                    self.lastFileLabel.stringValue = url.lastPathComponent
+                }
             } catch {
                 DemoLog.log("rerun failed: \(error)")
-                summary = "重跑失败：\(error)"
-            }
-            DispatchQueue.main.async {
-                self.statusLabel.stringValue = summary
-                self.lastFileLabel.stringValue = url.lastPathComponent
+                let errMsg = "重跑失败：\(error)"
+                DispatchQueue.main.async {
+                    self.statusLabel.stringValue = errMsg
+                    self.lastFileLabel.stringValue = url.lastPathComponent
+                }
             }
         }
     }
@@ -551,6 +654,76 @@ final class MainWindowController: NSWindowController {
             bits.append("endReason=\(r.endReason.label)")
         }
         return bits.joined(separator: " ")
+    }
+
+    // MARK: - Sentence list
+
+    private func clearSentenceList() {
+        for view in sentenceListStack.arrangedSubviews {
+            sentenceListStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        emptyListLabel.isHidden = false
+        sentenceListScrollView.isHidden = true
+    }
+
+    private func addSentenceRow(_ record: SentenceRecord) {
+        let indexLabel = NSTextField(
+            labelWithString: String(format: "Sentence %d", record.index))
+        indexLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+
+        let timeLabel = NSTextField(
+            labelWithString: "\(SentenceRecord.formatMs(record.startMs)) – \(SentenceRecord.formatMs(record.endMs))")
+        timeLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        timeLabel.textColor = .secondaryLabelColor
+
+        let isForceCut = (record.endEvent == FgVadEvent_SentenceForceCut)
+        let eventLabel = NSTextField(
+            labelWithString: isForceCut ? "ForceCut" : "SentenceEnded")
+        eventLabel.font = .systemFont(ofSize: 11)
+        eventLabel.textColor = isForceCut ? .systemOrange : .systemGreen
+
+        let playBtn = ActionButton(title: "▶") { [weak self] in
+            self?.playSentence(record)
+        }
+        playBtn.bezelStyle = .rounded
+        playBtn.controlSize = .small
+
+        let row = NSStackView(views: [indexLabel, timeLabel, eventLabel, playBtn])
+        row.orientation = .horizontal
+        row.spacing = 10
+        row.alignment = .centerY
+
+        sentenceListStack.addArrangedSubview(row)
+        emptyListLabel.isHidden = true
+        sentenceListScrollView.isHidden = false
+    }
+
+    private func playSentence(_ record: SentenceRecord) {
+        guard let wavURL = lastWavURL else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                let allSamples = try WavIO.readMonoInt16(from: wavURL)
+                let start = Int(record.startSample)
+                let end = min(Int(record.endSample), allSamples.count)
+                guard start < end else { return }
+                let sentSamples = Array(allSamples[start..<end])
+                let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent("fgvad_sent_\(record.index).wav")
+                try WavIO.writeMonoInt16(sentSamples, sampleRate: 16_000, to: tmpURL)
+                DispatchQueue.main.async {
+                    do {
+                        self.audioPlayer = try AVAudioPlayer(contentsOf: tmpURL)
+                        self.audioPlayer?.play()
+                    } catch {
+                        DemoLog.log("play failed: \(error)")
+                    }
+                }
+            } catch {
+                DemoLog.log("playSentence failed: \(error)")
+            }
+        }
     }
 
     @objc private func openRecordingsFolder() {
@@ -617,4 +790,42 @@ final class CardView: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) 未实现") }
+}
+
+// MARK: - SentenceRecord
+
+struct SentenceRecord {
+    let index: Int
+    let startSample: UInt64
+    let endSample: UInt64
+    let endEvent: FgVadEvent
+
+    var startMs: Double { Double(startSample) / 16.0 }
+    var endMs: Double { Double(endSample) / 16.0 }
+
+    static func formatMs(_ ms: Double) -> String {
+        let total = Int(ms)
+        let min = total / 60_000
+        let sec = (total % 60_000) / 1_000
+        let msec = total % 1_000
+        return String(format: "%02d:%02d.%03d", min, sec, msec)
+    }
+}
+
+// MARK: - ActionButton
+
+private final class ActionButton: NSButton {
+    private var clickHandler: (() -> Void)?
+
+    init(title: String, _ handler: @escaping () -> Void) {
+        super.init(frame: .zero)
+        self.title = title
+        self.clickHandler = handler
+        self.target = self
+        self.action = #selector(handleClick)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc private func handleClick() { clickHandler?() }
 }
