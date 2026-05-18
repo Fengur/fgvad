@@ -47,6 +47,7 @@ final class MainWindowController: NSWindowController {
     private let statusLabel = NSTextField(labelWithString: "就绪")
     private let liveStateLabel = NSTextField(labelWithString: "")
     private let lastFileLabel = NSTextField(labelWithString: "")
+    private let progressSpinner = NSProgressIndicator()
     private let versionLabel = NSTextField(
         labelWithString: "fgvad 0.1.0 · ten-vad")
 
@@ -157,7 +158,16 @@ final class MainWindowController: NSWindowController {
         lastFileLabel.textColor = .tertiaryLabelColor
         lastFileLabel.maximumNumberOfLines = 1
         lastFileLabel.lineBreakMode = .byTruncatingMiddle
-        statusStack.addArrangedSubview(statusLabel)
+        // spinner + status 文本同行：处理中转圈，平时仅显示文本
+        progressSpinner.style = .spinning
+        progressSpinner.controlSize = .small
+        progressSpinner.isIndeterminate = true
+        progressSpinner.isDisplayedWhenStopped = false
+        let statusRow = NSStackView(views: [progressSpinner, statusLabel])
+        statusRow.orientation = .horizontal
+        statusRow.spacing = 8
+        statusRow.alignment = .centerY
+        statusStack.addArrangedSubview(statusRow)
         statusStack.addArrangedSubview(liveStateLabel)
         statusStack.addArrangedSubview(lastFileLabel)
         statusStack.orientation = .vertical
@@ -562,6 +572,7 @@ final class MainWindowController: NSWindowController {
         statusLabel.stringValue = "读取 WAV…"
         liveStateLabel.stringValue = ""
         clearSentenceList()
+        setProcessing(true)
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             do {
@@ -605,6 +616,7 @@ final class MainWindowController: NSWindowController {
                     for rec in records { self.addSentenceRow(rec) }
                     self.statusLabel.stringValue = summary
                     self.lastFileLabel.stringValue = url.lastPathComponent
+                    self.setProcessing(false)
                 }
             } catch {
                 DemoLog.log("rerun failed: \(error)")
@@ -612,12 +624,26 @@ final class MainWindowController: NSWindowController {
                 DispatchQueue.main.async {
                     self.statusLabel.stringValue = errMsg
                     self.lastFileLabel.stringValue = url.lastPathComponent
+                    self.setProcessing(false)
                 }
             }
         }
     }
 
     // MARK: - Helpers
+
+    /// 长任务（重跑）期间锁住可能干扰结果的交互入口，并启停 spinner。
+    private func setProcessing(_ processing: Bool) {
+        if processing {
+            progressSpinner.startAnimation(nil)
+        } else {
+            progressSpinner.stopAnimation(nil)
+        }
+        recordButton.isEnabled = !processing
+        loadWavButton.isEnabled = !processing
+        openFolderButton.isEnabled = !processing
+        modeSegmented.isEnabled = !processing
+    }
 
     private func currentAnalyzerMode() -> FgVadAnalyzer.Mode {
         switch mode {
