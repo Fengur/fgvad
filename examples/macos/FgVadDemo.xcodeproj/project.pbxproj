@@ -106,11 +106,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7FE59827F9FBB3D756EDB171 /* Build configuration list for PBXNativeTarget "FgVadDemo" */;
 			buildPhases = (
-				380A8B943405B316EC30E36D /* 确保 fgvad 已构建 */,
+				41EF1C5FE634991027A6AB7E /* 构建 fgvad universal (arm64 + x86_64) */,
 				71D24BB95240F048EA29D409 /* Sources */,
 				D21903F6067603FA752DCCBD /* Frameworks */,
 				9297AD12FC00767B16C94547 /* Embed Frameworks */,
-				65AEAE284BCFD8CACD9C053F /* 复制 libfgvad.dylib 到 Frameworks 并修 rpath */,
+				B22F7C83EC9F1B40E2AE47FD /* 复制 universal libfgvad.dylib 到 Frameworks 并修 rpath */,
 			);
 			buildRules = (
 			);
@@ -158,7 +158,7 @@
 /* End PBXProject section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		380A8B943405B316EC30E36D /* 确保 fgvad 已构建 */ = {
+		41EF1C5FE634991027A6AB7E /* 构建 fgvad universal (arm64 + x86_64) */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -168,16 +168,16 @@
 			);
 			inputPaths = (
 			);
-			name = "确保 fgvad 已构建";
+			name = "构建 fgvad universal (arm64 + x86_64)";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n# Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径\nexport PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"error: 找不到 cargo。请确保 rustup 已安装（https://rustup.rs）。\" >&2\n  exit 1\nfi\ncd \"$PROJECT_DIR/../..\"\ncargo build\n";
+			shellScript = "set -e\n# Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径\nexport PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"error: 找不到 cargo。请确保 rustup 已安装（https://rustup.rs）。\" >&2\n  exit 1\nfi\ncd \"$PROJECT_DIR/../..\"\n# 同时编 arm64 + x86_64，lipo 成 universal binary，支持 Intel Mac\n./scripts/build-macos-universal.sh\n";
 		};
-		65AEAE284BCFD8CACD9C053F /* 复制 libfgvad.dylib 到 Frameworks 并修 rpath */ = {
+		B22F7C83EC9F1B40E2AE47FD /* 复制 universal libfgvad.dylib 到 Frameworks 并修 rpath */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -187,14 +187,14 @@
 			);
 			inputPaths = (
 			);
-			name = "复制 libfgvad.dylib 到 Frameworks 并修 rpath";
+			name = "复制 universal libfgvad.dylib 到 Frameworks 并修 rpath";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$FRAMEWORKS_DIR\"\ncp -f \"$PROJECT_DIR/../../target/debug/libfgvad.dylib\" \"$FRAMEWORKS_DIR/libfgvad.dylib\"\nchmod 755 \"$FRAMEWORKS_DIR/libfgvad.dylib\"\ncodesign --force --sign - \"$FRAMEWORKS_DIR/libfgvad.dylib\" || true\n";
+			shellScript = "set -e\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$FRAMEWORKS_DIR\"\ncp -f \"$PROJECT_DIR/../../target/universal-apple-darwin/debug/libfgvad.dylib\" \"$FRAMEWORKS_DIR/libfgvad.dylib\"\nchmod 755 \"$FRAMEWORKS_DIR/libfgvad.dylib\"\ncodesign --force --sign - \"$FRAMEWORKS_DIR/libfgvad.dylib\" || true\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -353,8 +353,8 @@
 					"@executable_path/../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/../../target/debug",
-					"$(PROJECT_DIR)/../../target/release",
+					"$(PROJECT_DIR)/../../target/universal-apple-darwin/debug",
+					"$(PROJECT_DIR)/../../target/universal-apple-darwin/release",
 				);
 				OTHER_LDFLAGS = (
 					"-lfgvad",
@@ -383,8 +383,8 @@
 					"@executable_path/../Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/../../target/debug",
-					"$(PROJECT_DIR)/../../target/release",
+					"$(PROJECT_DIR)/../../target/universal-apple-darwin/debug",
+					"$(PROJECT_DIR)/../../target/universal-apple-darwin/release",
 				);
 				OTHER_LDFLAGS = (
 					"-lfgvad",

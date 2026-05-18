@@ -34,8 +34,8 @@ targets:
         HEADER_SEARCH_PATHS:
           - $(PROJECT_DIR)/../../include
         LIBRARY_SEARCH_PATHS:
-          - $(PROJECT_DIR)/../../target/debug
-          - $(PROJECT_DIR)/../../target/release
+          - $(PROJECT_DIR)/../../target/universal-apple-darwin/debug
+          - $(PROJECT_DIR)/../../target/universal-apple-darwin/release
         OTHER_LDFLAGS:
           - -lfgvad
         LD_RUNPATH_SEARCH_PATHS:
@@ -43,7 +43,7 @@ targets:
         # 允许非签名的 dylib（开发期用 cargo 产出的 libfgvad.dylib）
         ENABLE_HARDENED_RUNTIME: "NO"
     preBuildScripts:
-      - name: "确保 fgvad 已构建"
+      - name: "构建 fgvad universal (arm64 + x86_64)"
         script: |
           set -e
           # Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径
@@ -53,15 +53,16 @@ targets:
             exit 1
           fi
           cd "$PROJECT_DIR/../.."
-          cargo build
+          # 同时编 arm64 + x86_64，lipo 成 universal binary，支持 Intel Mac
+          ./scripts/build-macos-universal.sh
         basedOnDependencyAnalysis: false
     postBuildScripts:
-      - name: "复制 libfgvad.dylib 到 Frameworks 并修 rpath"
+      - name: "复制 universal libfgvad.dylib 到 Frameworks 并修 rpath"
         script: |
           set -e
           FRAMEWORKS_DIR="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
           mkdir -p "$FRAMEWORKS_DIR"
-          cp -f "$PROJECT_DIR/../../target/debug/libfgvad.dylib" "$FRAMEWORKS_DIR/libfgvad.dylib"
+          cp -f "$PROJECT_DIR/../../target/universal-apple-darwin/debug/libfgvad.dylib" "$FRAMEWORKS_DIR/libfgvad.dylib"
           chmod 755 "$FRAMEWORKS_DIR/libfgvad.dylib"
           codesign --force --sign - "$FRAMEWORKS_DIR/libfgvad.dylib" || true
         basedOnDependencyAnalysis: false

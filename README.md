@@ -63,15 +63,22 @@ xcodegen generate && xcodebuild -scheme FgVadDemo build
 ### 构建
 
 ```bash
-cargo build       # libfgvad.dylib + 通过 build.rs 链接 ten-vad
-cargo test        # 端到端集成测试
+# 当前主机架构构建（Apple Silicon → arm64；Intel Mac → x86_64）
+cargo build
+
+# macOS universal binary（arm64 + x86_64 lipo）
+./scripts/build-macos-universal.sh             # debug
+./scripts/build-macos-universal.sh --release   # release
+
+cargo test                                     # 端到端集成测试
 ```
 
 构建产物：
 
-- `target/debug/libfgvad.dylib`
+- `target/<host>/debug/libfgvad.dylib` —— 单架构（默认 cargo build）
+- `target/universal-apple-darwin/debug/libfgvad.{dylib,a}` —— 双架构 universal（脚本产物）
 - `include/fgvad.h`（cbindgen 自动生成）
-- 内嵌的 `vendor/ten-vad/macOS/ten_vad.framework`
+- 内嵌的 `vendor/ten-vad/macOS/ten_vad.framework`（已是 universal）
 
 ### 跑 macOS Demo
 
@@ -167,9 +174,10 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 
 ## 当前状态与限制
 
-- **平台**：macOS arm64 构建脚本就绪。iOS / Linux / Windows / Android / WASM
-  待补（ten-vad 这些平台都有预编译库，主要工作量在 build.rs 分支处理 +
-  各平台 Recorder 实现）
+- **平台**：**macOS universal（arm64 + x86_64）已支持**——通过
+  `scripts/build-macos-universal.sh` 双架构 lipo，产物单文件可同时运行在
+  Apple Silicon 和 Intel Mac 上。Demo bundle 内嵌的 fgvad 已是 universal。
+  iOS / Android 在路线图，其他平台暂不计划
 - **输入**：仅 16 kHz / 单声道 / i16 PCM
 - **噪声**：当前对办公室级别（−50 dBFS）背景噪声够用；餐厅/车载/户外场景
   下推荐补一层 energy gate 前置（路线图）
@@ -178,8 +186,9 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 
 - [ ] 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（Demo）
 - [ ] energy gate 前置过滤（噪声鲁棒性）
-- [ ] iOS / Linux / Windows / Android / WASM 构建支持
-- [ ] CocoaPods / SPM / XCFramework 分发
+- [ ] iOS 构建支持 + XCFramework 打包
+- [ ] Android 构建支持（NDK + JNI bridge）
+- [ ] CocoaPods / SPM 分发
 
 ## License
 
