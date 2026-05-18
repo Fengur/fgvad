@@ -132,7 +132,8 @@ max_duration)`。完整 API 见 [`include/fgvad.h`](./include/fgvad.h)。
   `HeadSilenceTimeout` / `SpeechCompleted` / `MaxDurationReached` 三条
   endReason 路径加 2 个边界（短停顿合并、CONFIRM_FRAMES 边界）
 
-详见 [`test-data/README.md`](./test-data/README.md) 和
+详见 [`test-data/README.md`](./test-data/README.md)、
+[`test-data/long/README.md`](./test-data/long/README.md) 和
 [`test-data/short/README.md`](./test-data/short/README.md)。
 
 ## 鲁棒性参数（已对齐业界）
