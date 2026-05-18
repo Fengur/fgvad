@@ -48,6 +48,7 @@ final class FgVadAnalyzer {
         var streamOffsetSample: UInt64
         var frameCount: Int
         var audioLen: Int
+        var probabilities: [Float]
     }
 
     enum AnalyzerError: Error {
@@ -93,14 +94,22 @@ final class FgVadAnalyzer {
         out.reserveCapacity(count)
         for i in 0..<count {
             let v = fgvad_result_view(handle, UInt(i))
+            let fc = Int(v.frames_count)
+            let probs: [Float]
+            if let ptr = v.probabilities_ptr, fc > 0 {
+                probs = Array(UnsafeBufferPointer(start: ptr, count: fc))
+            } else {
+                probs = []
+            }
             out.append(Result(
                 type: v.result_type,
                 event: v.event,
                 state: v.state,
                 endReason: v.end_reason,
                 streamOffsetSample: v.stream_offset_sample,
-                frameCount: Int(v.frames_count),
-                audioLen: Int(v.audio_len)))
+                frameCount: fc,
+                audioLen: Int(v.audio_len),
+                probabilities: probs))
         }
         return out
     }
