@@ -157,7 +157,7 @@ max_duration)`。完整 API 见 [`include/fgvad.h`](./include/fgvad.h)。
 
 - [ ] 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（Demo）
 - [ ] energy gate 前置过滤（噪声鲁棒性）
-- [ ] iOS / Linux / Windows 构建支持
+- [ ] iOS / Linux / Windows / Android / WASM 构建支持
 - [ ] CocoaPods / SPM / XCFramework 分发
 
 ## License
