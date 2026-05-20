@@ -37,7 +37,6 @@ final class ViewController: UIViewController {
 
     private let recordButton = UIButton(type: .system)
     private let loadTestAudioButton = UIButton(type: .system)
-    private let playSentencesButton = UIButton(type: .system)
     private let statusLabel = UILabel()
 
     // 处理中遮罩（runAnalyze 期间显示，吃掉点击）
@@ -50,7 +49,7 @@ final class ViewController: UIViewController {
     private var lastWavURL: URL?
     private var sentenceRecords: [SentenceRecord] = []
 
-    private struct SentenceRecord {
+    fileprivate struct SentenceRecord {
         let index: Int
         let startSample: UInt64
         let endSample: UInt64
@@ -65,7 +64,8 @@ final class ViewController: UIViewController {
             return String(format: "%02d:%02d.%03d", m, s, ms)
         }
     }
-    private let logView = UITextView()
+    private let sentenceTable = UITableView(frame: .zero, style: .plain)
+    private let emptyStateLabel = UILabel()
     private let versionLabel = UILabel()
 
     // MARK: - Models
@@ -135,27 +135,28 @@ final class ViewController: UIViewController {
         loadTestAudioButton.addTarget(self, action: #selector(showTestAudioPicker), for: .touchUpInside)
         view.addSubview(loadTestAudioButton)
 
-        playSentencesButton.setTitle("▶ 按句试听切分结果", for: .normal)
-        playSentencesButton.backgroundColor = .systemGray5
-        playSentencesButton.setTitleColor(.label, for: .normal)
-        playSentencesButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-        playSentencesButton.layer.cornerRadius = 10
-        playSentencesButton.addTarget(self, action: #selector(showSentencePicker), for: .touchUpInside)
-        playSentencesButton.isEnabled = false
-        view.addSubview(playSentencesButton)
-
         statusLabel.text = "就绪"
         statusLabel.font = .systemFont(ofSize: 14, weight: .medium)
         statusLabel.textAlignment = .center
         statusLabel.numberOfLines = 2
         view.addSubview(statusLabel)
 
-        logView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        logView.isEditable = false
-        logView.layer.borderColor = UIColor.separator.cgColor
-        logView.layer.borderWidth = 0.5
-        logView.layer.cornerRadius = 8
-        view.addSubview(logView)
+        sentenceTable.dataSource = self
+        sentenceTable.delegate = self
+        sentenceTable.register(SentenceCell.self, forCellReuseIdentifier: SentenceCell.reuseID)
+        sentenceTable.layer.borderColor = UIColor.separator.cgColor
+        sentenceTable.layer.borderWidth = 0.5
+        sentenceTable.layer.cornerRadius = 8
+        sentenceTable.rowHeight = 52
+        sentenceTable.separatorInset = .init(top: 0, left: 12, bottom: 0, right: 12)
+        view.addSubview(sentenceTable)
+
+        emptyStateLabel.text = "选个测试音频跑一次 VAD 看切分结果\n或开始录音"
+        emptyStateLabel.font = .systemFont(ofSize: 13)
+        emptyStateLabel.textColor = .tertiaryLabel
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        view.addSubview(emptyStateLabel)
 
         versionLabel.text = "fgvad iOS demo · ten-vad"
         versionLabel.font = .systemFont(ofSize: 10)
@@ -294,16 +295,15 @@ final class ViewController: UIViewController {
         recordButton.frame = CGRect(x: inset, y: y + 6, width: width - inset * 2, height: 48)
         y = recordButton.frame.maxY + 8
 
-        let halfW = (width - inset * 2 - 8) / 2
-        loadTestAudioButton.frame = CGRect(x: inset, y: y, width: halfW, height: 36)
-        playSentencesButton.frame = CGRect(x: inset + halfW + 8, y: y, width: halfW, height: 36)
+        loadTestAudioButton.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 36)
         y = loadTestAudioButton.frame.maxY + 12
 
         statusLabel.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 38)
         y = statusLabel.frame.maxY + 8
 
-        let logBottom = view.bounds.height - safe.bottom - 24 - 18
-        logView.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: max(80, logBottom - y))
+        let tableBottom = view.bounds.height - safe.bottom - 24 - 18
+        sentenceTable.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: max(120, tableBottom - y))
+        emptyStateLabel.frame = sentenceTable.frame.insetBy(dx: 16, dy: 16)
 
         versionLabel.frame = CGRect(
             x: inset, y: view.bounds.height - safe.bottom - 18,
@@ -352,6 +352,7 @@ final class ViewController: UIViewController {
         analyzer.start()
         self.analyzer = analyzer
         sentenceCount = 0
+        applySentenceRecords([])  // 录音模式下不维护 sentence list（无源 wav 不能 ▶ 试听）
 
         recorder.delegate = self
         guard recorder.start() else {
@@ -369,8 +370,7 @@ final class ViewController: UIViewController {
         recordButton.backgroundColor = .systemRed
         modeSegmented.isEnabled = false
         statusLabel.text = currentMode == .short ? "录音中 · 说完自动停" : "录音中 · 手动点停止"
-        logView.text = ""
-        appendLog("[start] mode=\(currentMode == .short ? "short" : "long")")
+        log("[start] mode=\(currentMode == .short ? "short" : "long")")
     }
 
     private func stopRecording(reason: String) {
@@ -390,7 +390,7 @@ final class ViewController: UIViewController {
         modeSegmented.isEnabled = true
 
         statusLabel.text = "已结束 · \(reason) · \(sentenceCount) 句 · \(endReason.label)"
-        appendLog("[stop] reason=\(reason) finalState=\(finalState.label) endReason=\(endReason.label)")
+        log("[stop] reason=\(reason) finalState=\(finalState.label) endReason=\(endReason.label)")
     }
 
     private func updateTick() {
@@ -403,13 +403,20 @@ final class ViewController: UIViewController {
         )
     }
 
-    private func appendLog(_ msg: String) {
-        let ts = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        logView.text += "[\(ts)] \(msg)\n"
-        // 滚到最底
-        let len = logView.text.utf16.count
-        if len > 0 {
-            logView.scrollRangeToVisible(NSRange(location: len - 1, length: 1))
+    /// 控制台日志（Xcode debug console / Console.app 可见），不再占用 UI 空间。
+    private func log(_ msg: String) {
+        NSLog("[FgVadDemo] %@", msg)
+    }
+
+    /// 更新 sentenceRecords + 同步 table view + empty state 显示。
+    private func applySentenceRecords(_ records: [SentenceRecord]) {
+        sentenceRecords = records
+        sentenceTable.reloadData()
+        emptyStateLabel.isHidden = !records.isEmpty
+        if !records.isEmpty {
+            sentenceTable.scrollToRow(
+                at: IndexPath(row: 0, section: 0),
+                at: .top, animated: false)
         }
     }
 
@@ -570,38 +577,6 @@ final class ViewController: UIViewController {
         }
     }
 
-    @objc private func showSentencePicker() {
-        guard !sentenceRecords.isEmpty, lastWavURL != nil else {
-            showToast("还没有切分结果，先跑一次 analyze")
-            return
-        }
-
-        let sheet = UIAlertController(
-            title: "按句试听（共 \(sentenceRecords.count) 句）",
-            message: nil,
-            preferredStyle: .actionSheet)
-
-        // 列表太长 ActionSheet 会很长，但 iOS UIAlertController 顶得住
-        // 几十条；超过这个量后就该换 UITableView。
-        for record in sentenceRecords {
-            let isForceCut = record.endEvent == FgVadEvent_SentenceForceCut
-            let tag = isForceCut ? " · ForceCut" : ""
-            let title = "Sentence \(record.index)  "
-                + "\(SentenceRecord.formatMs(record.startMs)) – \(SentenceRecord.formatMs(record.endMs))"
-                + tag
-            sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
-                self?.playSentence(record)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = playSentencesButton
-            pop.sourceRect = playSentencesButton.bounds
-        }
-        present(sheet, animated: true)
-    }
-
     private func playSentence(_ record: SentenceRecord) {
         guard let wavURL = lastWavURL else { return }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
@@ -636,8 +611,7 @@ final class ViewController: UIViewController {
 
     private func runAnalyze(on url: URL) {
         statusLabel.text = "读取 \(url.lastPathComponent)…"
-        logView.text = ""
-        appendLog("[rerun] file=\(url.lastPathComponent) mode=\(currentMode == .short ? "short" : "long")")
+        log("[rerun] file=\(url.lastPathComponent) mode=\(currentMode == .short ? "short" : "long")")
         setProcessing(true, hint: "处理中…\n\(url.lastPathComponent)")
 
         let mode = currentAnalyzerMode()
@@ -653,7 +627,7 @@ final class ViewController: UIViewController {
                 DispatchQueue.main.async {
                     self.setProcessing(false)
                     self.statusLabel.text = "失败：\(error)"
-                    self.appendLog("[rerun error] \(error)")
+                    self.log("[rerun error] \(error)")
                     self.showToast("失败：\(error.localizedDescription)")
                 }
                 return
@@ -693,10 +667,9 @@ final class ViewController: UIViewController {
             DispatchQueue.main.async {
                 self.setProcessing(false)
                 self.lastWavURL = url
-                self.sentenceRecords = records
-                self.playSentencesButton.isEnabled = !records.isEmpty
-                for l in lines { self.appendLog(l) }
-                self.appendLog("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
+                self.applySentenceRecords(records)
+                for l in lines { self.log(l) }
+                self.log("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
                     + "\(result.finalState.label)/\(result.endReason.label) · \(elapsedMs)ms")
                 self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(result.endReason.label)"
 
@@ -725,14 +698,14 @@ extension ViewController: FGIOSRecorderDelegate {
         do {
             results = try analyzer.feed(buffer)
         } catch {
-            appendLog("[error] feed failed: \(error)")
+            log("[error] feed failed: \(error)")
             return
         }
 
         for r in results {
             if r.event != FgVadEvent_None_, let ev = r.event.label {
                 let tStart = Double(r.streamOffsetSample) / 16000.0
-                appendLog(String(format: "  %.3fs %@", tStart, ev))
+                log(String(format: "  %.3fs %@", tStart, ev))
                 if r.event == FgVadEvent_SentenceStarted {
                     sentenceCount += 1
                 }
@@ -746,15 +719,118 @@ extension ViewController: FGIOSRecorderDelegate {
     }
 
     func recorderDidStart(_ recorder: FGIOSRecorder) {
-        appendLog("[recorder started]")
+        log("[recorder started]")
     }
 
     func recorderDidStop(_ recorder: FGIOSRecorder) {
-        appendLog("[recorder stopped]")
+        log("[recorder stopped]")
     }
 
     func recorder(_ recorder: FGIOSRecorder, didFailWithError error: Error) {
-        appendLog("[recorder error] \(error)")
+        log("[recorder error] \(error)")
         statusLabel.text = "录音失败：\(error.localizedDescription)"
+    }
+}
+
+// MARK: - UITableViewDataSource / Delegate
+
+extension ViewController: UITableViewDataSource, UITableViewDelegate {
+
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        sentenceRecords.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(
+            withIdentifier: SentenceCell.reuseID, for: indexPath) as! SentenceCell
+        let r = sentenceRecords[indexPath.row]
+        cell.configure(record: r)
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let record = sentenceRecords[indexPath.row]
+        playSentence(record)
+    }
+}
+
+// MARK: - SentenceCell（纯 frame 布局，无约束）
+
+private final class SentenceCell: UITableViewCell {
+
+    static let reuseID = "SentenceCell"
+
+    private let indexLabel = UILabel()
+    private let timeLabel = UILabel()
+    private let eventLabel = UILabel()
+    private let playGlyph = UILabel()  // ▶
+
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        selectionStyle = .default
+
+        indexLabel.font = .monospacedSystemFont(ofSize: 13, weight: .medium)
+        contentView.addSubview(indexLabel)
+
+        timeLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        timeLabel.textColor = .secondaryLabel
+        contentView.addSubview(timeLabel)
+
+        eventLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        contentView.addSubview(eventLabel)
+
+        playGlyph.text = "▶"
+        playGlyph.font = .systemFont(ofSize: 18)
+        playGlyph.textColor = .systemBlue
+        playGlyph.textAlignment = .center
+        contentView.addSubview(playGlyph)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func configure(record: ViewController.SentenceRecord) {
+        indexLabel.text = "Sentence \(record.index)"
+        timeLabel.text = "\(ViewController.SentenceRecord.formatMs(record.startMs)) – "
+            + "\(ViewController.SentenceRecord.formatMs(record.endMs))"
+        let isForceCut = record.endEvent == FgVadEvent_SentenceForceCut
+        eventLabel.text = isForceCut ? "ForceCut" : "SentenceEnded"
+        eventLabel.textColor = isForceCut ? .systemOrange : .systemGreen
+        setNeedsLayout()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let bounds = contentView.bounds
+        let glyphW: CGFloat = 32
+        let leftInset: CGFloat = 14
+        let rightInset: CGFloat = 12
+        let topInset: CGFloat = 6
+
+        playGlyph.frame = CGRect(
+            x: bounds.width - rightInset - glyphW,
+            y: 0, width: glyphW, height: bounds.height
+        )
+
+        let mainW = bounds.width - leftInset - rightInset - glyphW
+
+        // 第一行：Sentence N + 事件 tag（右贴在 ▶ 左边）
+        let firstRowH: CGFloat = 18
+        let eventW: CGFloat = 100
+        indexLabel.frame = CGRect(
+            x: leftInset, y: topInset,
+            width: mainW - eventW - 8, height: firstRowH
+        )
+        eventLabel.frame = CGRect(
+            x: leftInset + mainW - eventW, y: topInset,
+            width: eventW, height: firstRowH
+        )
+        eventLabel.textAlignment = .right
+
+        // 第二行：时间戳
+        timeLabel.frame = CGRect(
+            x: leftInset, y: topInset + firstRowH + 2,
+            width: mainW, height: 18
+        )
     }
 }
