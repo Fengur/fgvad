@@ -35,6 +35,7 @@ final class ViewController: UIViewController {
     private let longDynamicSwitch    = UISwitch()
 
     private let recordButton = UIButton(type: .system)
+    private let loadTestAudioButton = UIButton(type: .system)
     private let statusLabel = UILabel()
     private let logView = UITextView()
     private let versionLabel = UILabel()
@@ -97,6 +98,14 @@ final class ViewController: UIViewController {
         recordButton.layer.cornerRadius = 12
         recordButton.addTarget(self, action: #selector(toggleRecord), for: .touchUpInside)
         view.addSubview(recordButton)
+
+        loadTestAudioButton.setTitle("加载测试音频", for: .normal)
+        loadTestAudioButton.backgroundColor = .systemGray5
+        loadTestAudioButton.setTitleColor(.label, for: .normal)
+        loadTestAudioButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        loadTestAudioButton.layer.cornerRadius = 10
+        loadTestAudioButton.addTarget(self, action: #selector(showTestAudioPicker), for: .touchUpInside)
+        view.addSubview(loadTestAudioButton)
 
         statusLabel.text = "就绪"
         statusLabel.font = .systemFont(ofSize: 14, weight: .medium)
@@ -231,7 +240,10 @@ final class ViewController: UIViewController {
         }
 
         recordButton.frame = CGRect(x: inset, y: y + 6, width: width - inset * 2, height: 48)
-        y = recordButton.frame.maxY + 12
+        y = recordButton.frame.maxY + 8
+
+        loadTestAudioButton.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 36)
+        y = loadTestAudioButton.frame.maxY + 12
 
         statusLabel.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 38)
         y = statusLabel.frame.maxY + 8
@@ -358,6 +370,89 @@ final class ViewController: UIViewController {
 
     private func parseU32(_ field: UITextField, _ fallback: UInt32) -> UInt32 {
         UInt32(field.text ?? "") ?? fallback
+    }
+
+    // MARK: - Test audio picker (batch analyze on bundled WAVs)
+
+    private func bundledTestAudioURLs() -> [URL] {
+        // project.yml 把 test-data/short/ 当 folder reference 打成 .app/short/
+        // （folder reference 保留源目录名 "short"）
+        guard let testDir = Bundle.main.url(forResource: "short", withExtension: nil) else {
+            return []
+        }
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: testDir, includingPropertiesForKeys: nil)) ?? []
+        return files
+            .filter { $0.pathExtension.lowercased() == "wav" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    @objc private func showTestAudioPicker() {
+        guard !recorder.isRecording else { return }
+        let urls = bundledTestAudioURLs()
+        guard !urls.isEmpty else {
+            statusLabel.text = "未找到 bundled 测试音频"
+            return
+        }
+
+        let sheet = UIAlertController(
+            title: "选一个测试音频跑批式 analyze",
+            message: "用当前模式 + 参数。短时素材建议在短时模式下跑。",
+            preferredStyle: .actionSheet)
+
+        for url in urls {
+            sheet.addAction(UIAlertAction(title: url.lastPathComponent, style: .default) { [weak self] _ in
+                self?.runAnalyze(on: url)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        // iPad popover
+        if let pop = sheet.popoverPresentationController {
+            pop.sourceView = loadTestAudioButton
+            pop.sourceRect = loadTestAudioButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    private func runAnalyze(on url: URL) {
+        statusLabel.text = "读取 \(url.lastPathComponent)…"
+        logView.text = ""
+        appendLog("[rerun] file=\(url.lastPathComponent) mode=\(currentMode == .short ? "short" : "long")")
+
+        let mode = currentAnalyzerMode()
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let result: (results: [FgVadAnalyzer.Result], finalState: FgVadState, endReason: FgVadEndReason)
+            do {
+                let samples = try WavIO.readMonoInt16(from: url)
+                result = try FgVadAnalyzer.analyze(samples: samples, mode: mode)
+            } catch {
+                DispatchQueue.main.async {
+                    self.statusLabel.text = "失败：\(error)"
+                    self.appendLog("[rerun error] \(error)")
+                }
+                return
+            }
+
+            // 统计
+            var sentenceCount = 0
+            var lines: [String] = []
+            for r in result.results {
+                if r.event != FgVadEvent_None_, let ev = r.event.label {
+                    let tStart = Double(r.streamOffsetSample) / 16000.0
+                    let tEnd = tStart + Double(r.audioLen) / 16000.0
+                    lines.append(String(format: "  %.3fs-%.3fs %@", tStart, tEnd, ev))
+                    if r.event == FgVadEvent_SentenceStarted { sentenceCount += 1 }
+                }
+            }
+
+            DispatchQueue.main.async {
+                for l in lines { self.appendLog(l) }
+                self.appendLog("[rerun done] \(sentenceCount) 句 · \(result.finalState.label)/\(result.endReason.label)")
+                self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(result.endReason.label)"
+            }
+        }
     }
 }
 

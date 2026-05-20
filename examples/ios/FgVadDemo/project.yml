@@ -23,6 +23,13 @@ targets:
           - UIInterfaceOrientationPortrait
     sources:
       - path: FgVadDemo
+      # 把 short 测试集作为 app 资源打包进 .app/test-audio/
+      # （long yixi 是 47MB，故意不打包；以后若需要从 Documents 注入）
+      - path: ../../../test-data/short
+        name: test-audio
+        group: TestAudio
+        type: folder
+        buildPhase: resources
     settings:
       base:
         SWIFT_VERSION: "5.9"

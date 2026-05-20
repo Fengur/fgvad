@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */; };
+		470DF40E2E56ACB35C0A1F59 /* test-audio in Resources */ = {isa = PBXBuildFile; fileRef = AD132955B753F7C74B4FEBED /* test-audio */; };
 		8359FE2B44A370431EC9C78A /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D8BB17FD23369CD081B25F /* ViewController.swift */; };
 		A18655AB0F16BFFAAADAC9A8 /* FGAudioController.m in Sources */ = {isa = PBXBuildFile; fileRef = 11EAF785075DABA8753AC025 /* FGAudioController.m */; };
 		A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */; };
@@ -22,6 +23,7 @@
 		641C1D13B18A302F0E71D888 /* FGIOSRecorder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FGIOSRecorder.m; sourceTree = "<group>"; };
 		7C627B9D2A123A64C391AD37 /* FgVadDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FgVadDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8660703F0AB737C89F158ED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		AD132955B753F7C74B4FEBED /* test-audio */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "test-audio"; path = "../../../test-data/short"; sourceTree = SOURCE_ROOT; };
 		B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FgVadAnalyzer.swift; sourceTree = "<group>"; };
 		B6D8BB17FD23369CD081B25F /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		CCC8FC3869527CBE32A1FBCE /* WavIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavIO.swift; sourceTree = "<group>"; };
@@ -42,8 +44,17 @@
 			isa = PBXGroup;
 			children = (
 				E17AB3B01689F9DB6F6A7163 /* FgVadDemo */,
+				81274B44131DC54E352F5351 /* TestAudio */,
 				00D6AFFC9167E7E79158EB6B /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		81274B44131DC54E352F5351 /* TestAudio */ = {
+			isa = PBXGroup;
+			children = (
+				AD132955B753F7C74B4FEBED /* test-audio */,
+			);
+			name = TestAudio;
 			sourceTree = "<group>";
 		};
 		E17AB3B01689F9DB6F6A7163 /* FgVadDemo */ = {
@@ -72,6 +83,7 @@
 			buildPhases = (
 				E5E770E8081DAE3D8FE8F3E9 /* 构建 fgvad iOS 产物 */,
 				71D24BB95240F048EA29D409 /* Sources */,
+				208BB9976B4CB727A2710B84 /* Resources */,
 				92F8FE905B9EECB408C72C1B /* 嵌入 libfgvad.dylib 和 ten_vad.framework 到 .app */,
 			);
 			buildRules = (
@@ -114,6 +126,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		208BB9976B4CB727A2710B84 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				470DF40E2E56ACB35C0A1F59 /* test-audio in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
 		92F8FE905B9EECB408C72C1B /* 嵌入 libfgvad.dylib 和 ten_vad.framework 到 .app */ = {
