@@ -63,22 +63,31 @@ xcodegen generate && xcodebuild -scheme FgVadDemo build
 ### 构建
 
 ```bash
-# 当前主机架构构建（Apple Silicon → arm64；Intel Mac → x86_64）
+# macOS：当前主机架构构建（Apple Silicon → arm64；Intel Mac → x86_64）
 cargo build
 
 # macOS universal binary（arm64 + x86_64 lipo）
 ./scripts/build-macos-universal.sh             # debug
 ./scripts/build-macos-universal.sh --release   # release
 
-cargo test                                     # 端到端集成测试
+# iOS（device + simulator 各编一份）
+./scripts/build-ios.sh                         # debug
+./scripts/build-ios.sh --release               # release
+
+cargo test                                     # 端到端集成测试（macOS only）
 ```
 
 构建产物：
 
 - `target/<host>/debug/libfgvad.dylib` —— 单架构（默认 cargo build）
 - `target/universal-apple-darwin/debug/libfgvad.{dylib,a}` —— 双架构 universal（脚本产物）
+- `target/aarch64-apple-ios/debug/libfgvad.{dylib,a}` —— iOS device
+- `target/aarch64-apple-ios-sim/debug/libfgvad.{dylib,a}` —— iOS Simulator
 - `include/fgvad.h`（cbindgen 自动生成）
-- 内嵌的 `vendor/ten-vad/macOS/ten_vad.framework`（已是 universal）
+- 内嵌的 ten-vad framework：
+  - `vendor/ten-vad/macOS/ten_vad.framework`（universal）
+  - `vendor/ten-vad/iOS/device/ten_vad.framework`（arm64 device）
+  - `vendor/ten-vad/iOS/simulator/ten_vad.framework`（arm64 simulator，vtool 重打 platform 标记，详见 vendor 内 README）
 
 ### 跑 macOS Demo
 
@@ -174,10 +183,14 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 
 ## 当前状态与限制
 
-- **平台**：**macOS universal（arm64 + x86_64）已支持**——通过
-  `scripts/build-macos-universal.sh` 双架构 lipo，产物单文件可同时运行在
-  Apple Silicon 和 Intel Mac 上。Demo bundle 内嵌的 fgvad 已是 universal。
-  iOS / Android 在路线图，其他平台暂不计划
+- **macOS universal（arm64 + x86_64）**：✅ 已支持。`scripts/build-macos-universal.sh`
+  双架构 lipo，单产物兼容 Apple Silicon 和 Intel Mac。Demo bundle 嵌入的 fgvad
+  已是 universal
+- **iOS（device + simulator）**：✅ 库构建链路已通。`scripts/build-ios.sh`
+  同时产出 `aarch64-apple-ios`（device）和 `aarch64-apple-ios-sim`（simulator）
+  两份产物，链接对应平台的 ten_vad.framework。**XCFramework 打包脚本和 iOS Demo 待补**
+- **Android**：在路线图
+- **Linux / Windows / WASM**：暂不计划
 - **输入**：仅 16 kHz / 单声道 / i16 PCM
 - **噪声**：当前对办公室级别（−50 dBFS）背景噪声够用；餐厅/车载/户外场景
   下推荐补一层 energy gate 前置（路线图）
@@ -186,7 +199,8 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 
 - [ ] 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（Demo）
 - [ ] energy gate 前置过滤（噪声鲁棒性）
-- [ ] iOS 构建支持 + XCFramework 打包
+- [x] iOS 库构建支持（device + simulator）
+- [ ] iOS Demo + XCFramework 打包
 - [ ] Android 构建支持（NDK + JNI bridge）
 - [ ] CocoaPods / SPM 分发
 
