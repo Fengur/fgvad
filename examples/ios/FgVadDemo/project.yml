@@ -85,14 +85,17 @@ targets:
             TEN_VAD_DIR="$PROJECT_DIR/../../../vendor/ten-vad/iOS/simulator"
           fi
 
+          # 用与 app 相同的签名身份（simulator 时是 -, device 时是 Apple Development 证书 SHA）
+          SIGN_IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
+
           # 1) libfgvad.dylib
           cp -f "$PROJECT_DIR/../../../target/$RUST_TARGET/debug/libfgvad.dylib" \
                 "$FRAMEWORKS_DIR/libfgvad.dylib"
           chmod 755 "$FRAMEWORKS_DIR/libfgvad.dylib"
-          codesign --force --sign - "$FRAMEWORKS_DIR/libfgvad.dylib" || true
+          codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/libfgvad.dylib"
 
           # 2) ten_vad.framework
           rm -rf "$FRAMEWORKS_DIR/ten_vad.framework"
           cp -R "$TEN_VAD_DIR/ten_vad.framework" "$FRAMEWORKS_DIR/"
-          codesign --force --sign - "$FRAMEWORKS_DIR/ten_vad.framework" || true
+          codesign --force --sign "$SIGN_IDENTITY" "$FRAMEWORKS_DIR/ten_vad.framework"
         basedOnDependencyAnalysis: false
