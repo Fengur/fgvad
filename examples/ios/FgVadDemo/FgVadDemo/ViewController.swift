@@ -37,6 +37,11 @@ final class ViewController: UIViewController {
     private let recordButton = UIButton(type: .system)
     private let loadTestAudioButton = UIButton(type: .system)
     private let statusLabel = UILabel()
+
+    // 处理中遮罩（runAnalyze 期间显示，吃掉点击）
+    private let processingOverlay = UIView()
+    private let processingIndicator = UIActivityIndicatorView(style: .large)
+    private let processingLabel = UILabel()
     private let logView = UITextView()
     private let versionLabel = UILabel()
 
@@ -125,6 +130,21 @@ final class ViewController: UIViewController {
         versionLabel.textColor = .tertiaryLabel
         versionLabel.textAlignment = .center
         view.addSubview(versionLabel)
+
+        // 处理中遮罩
+        processingOverlay.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        processingOverlay.isHidden = true
+        view.addSubview(processingOverlay)
+
+        processingIndicator.color = .white
+        processingIndicator.hidesWhenStopped = true
+        processingOverlay.addSubview(processingIndicator)
+
+        processingLabel.text = "处理中…"
+        processingLabel.textColor = .white
+        processingLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        processingLabel.textAlignment = .center
+        processingOverlay.addSubview(processingLabel)
     }
 
     private static func makeNumField(default value: String) -> UITextField {
@@ -255,6 +275,15 @@ final class ViewController: UIViewController {
             x: inset, y: view.bounds.height - safe.bottom - 18,
             width: width - inset * 2, height: 14
         )
+
+        // 遮罩铺满全屏
+        processingOverlay.frame = view.bounds
+        let centerX = view.bounds.midX
+        let centerY = view.bounds.midY
+        processingIndicator.frame = CGRect(x: centerX - 25, y: centerY - 30, width: 50, height: 50)
+        processingLabel.frame = CGRect(
+            x: centerX - 80, y: centerY + 25, width: 160, height: 20
+        )
     }
 
     // MARK: - Recording
@@ -375,16 +404,74 @@ final class ViewController: UIViewController {
     // MARK: - Test audio picker (batch analyze on bundled WAVs)
 
     private func bundledTestAudioURLs() -> [URL] {
-        // project.yml 把 test-data/short/ 当 folder reference 打成 .app/short/
-        // （folder reference 保留源目录名 "short"）
-        guard let testDir = Bundle.main.url(forResource: "short", withExtension: nil) else {
-            return []
+        // project.yml 把 test-data/short/ 和 test-data/long/ 当 folder
+        // reference 打成 .app/short/ 和 .app/long/（folder reference 保留
+        // 源目录名）。
+        var urls: [URL] = []
+        for sub in ["short", "long"] {
+            guard let dir = Bundle.main.url(forResource: sub, withExtension: nil) else { continue }
+            let files = (try? FileManager.default.contentsOfDirectory(
+                at: dir, includingPropertiesForKeys: nil)) ?? []
+            urls.append(contentsOf:
+                files.filter { $0.pathExtension.lowercased() == "wav" }
+                     .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            )
         }
-        let files = (try? FileManager.default.contentsOfDirectory(
-            at: testDir, includingPropertiesForKeys: nil)) ?? []
-        return files
-            .filter { $0.pathExtension.lowercased() == "wav" }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return urls
+    }
+
+    /// 处理中遮罩开关——同时禁用关键交互入口。
+    private func setProcessing(_ on: Bool, hint: String = "处理中…") {
+        if on {
+            processingLabel.text = hint
+            processingOverlay.isHidden = false
+            processingIndicator.startAnimating()
+            view.bringSubviewToFront(processingOverlay)
+        } else {
+            processingIndicator.stopAnimating()
+            processingOverlay.isHidden = true
+        }
+        recordButton.isEnabled = !on
+        loadTestAudioButton.isEnabled = !on
+        modeSegmented.isEnabled = !on
+    }
+
+    /// 简单 toast：底部居中黑色圆角，淡入显示一会儿淡出。
+    private func showToast(_ message: String, duration: TimeInterval = 1.6) {
+        let toast = UILabel()
+        toast.text = message
+        toast.textColor = .white
+        toast.backgroundColor = UIColor.black.withAlphaComponent(0.78)
+        toast.font = .systemFont(ofSize: 14, weight: .medium)
+        toast.textAlignment = .center
+        toast.numberOfLines = 0
+        toast.layer.cornerRadius = 14
+        toast.layer.masksToBounds = true
+
+        let maxW = view.bounds.width - 64
+        let textSize = (toast.text ?? "").boundingRect(
+            with: CGSize(width: maxW - 32, height: 200),
+            options: [.usesLineFragmentOrigin],
+            attributes: [.font: toast.font!],
+            context: nil
+        )
+        let toastW = min(maxW, ceil(textSize.width) + 32)
+        let toastH = ceil(textSize.height) + 22
+        toast.frame = CGRect(
+            x: (view.bounds.width - toastW) / 2,
+            y: view.bounds.height - view.safeAreaInsets.bottom - 90,
+            width: toastW, height: toastH
+        )
+        toast.alpha = 0
+        view.addSubview(toast)
+
+        UIView.animate(withDuration: 0.18, animations: { toast.alpha = 1 }) { _ in
+            UIView.animate(withDuration: 0.32, delay: duration, options: [], animations: {
+                toast.alpha = 0
+            }) { _ in
+                toast.removeFromSuperview()
+            }
+        }
     }
 
     @objc private func showTestAudioPicker() {
@@ -419,8 +506,11 @@ final class ViewController: UIViewController {
         statusLabel.text = "读取 \(url.lastPathComponent)…"
         logView.text = ""
         appendLog("[rerun] file=\(url.lastPathComponent) mode=\(currentMode == .short ? "short" : "long")")
+        setProcessing(true, hint: "处理中…\n\(url.lastPathComponent)")
 
         let mode = currentAnalyzerMode()
+        let started = Date()
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             let result: (results: [FgVadAnalyzer.Result], finalState: FgVadState, endReason: FgVadEndReason)
@@ -429,14 +519,17 @@ final class ViewController: UIViewController {
                 result = try FgVadAnalyzer.analyze(samples: samples, mode: mode)
             } catch {
                 DispatchQueue.main.async {
+                    self.setProcessing(false)
                     self.statusLabel.text = "失败：\(error)"
                     self.appendLog("[rerun error] \(error)")
+                    self.showToast("失败：\(error.localizedDescription)")
                 }
                 return
             }
 
             // 统计
             var sentenceCount = 0
+            var forceCutCount = 0
             var lines: [String] = []
             for r in result.results {
                 if r.event != FgVadEvent_None_, let ev = r.event.label {
@@ -444,13 +537,25 @@ final class ViewController: UIViewController {
                     let tEnd = tStart + Double(r.audioLen) / 16000.0
                     lines.append(String(format: "  %.3fs-%.3fs %@", tStart, tEnd, ev))
                     if r.event == FgVadEvent_SentenceStarted { sentenceCount += 1 }
+                    if r.event == FgVadEvent_SentenceForceCut { forceCutCount += 1 }
                 }
             }
 
+            let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
             DispatchQueue.main.async {
+                self.setProcessing(false)
                 for l in lines { self.appendLog(l) }
-                self.appendLog("[rerun done] \(sentenceCount) 句 · \(result.finalState.label)/\(result.endReason.label)")
+                self.appendLog("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
+                    + "\(result.finalState.label)/\(result.endReason.label) · \(elapsedMs)ms")
                 self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(result.endReason.label)"
+
+                let toastMsg: String
+                if forceCutCount > 0 {
+                    toastMsg = "✓ \(sentenceCount) 句 · \(forceCutCount) ForceCut\n\(elapsedMs)ms"
+                } else {
+                    toastMsg = "✓ \(sentenceCount) 句 · \(result.endReason.label)\n\(elapsedMs)ms"
+                }
+                self.showToast(toastMsg, duration: 2.2)
             }
         }
     }

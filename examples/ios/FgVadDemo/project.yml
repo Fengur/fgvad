@@ -23,10 +23,14 @@ targets:
           - UIInterfaceOrientationPortrait
     sources:
       - path: FgVadDemo
-      # 把 short 测试集作为 app 资源打包进 .app/test-audio/
-      # （long yixi 是 47MB，故意不打包；以后若需要从 Documents 注入）
+      # 把 test-data 整套（short 6 个 case + long yixi 47MB）作为 folder
+      # reference 打包进 .app/short/ 和 .app/long/。yixi 单文件 47MB，让
+      # app size 涨到 ~50MB——可接受（hobby demo 用，不分发 App Store）。
       - path: ../../../test-data/short
-        name: test-audio
+        group: TestAudio
+        type: folder
+        buildPhase: resources
+      - path: ../../../test-data/long
         group: TestAudio
         type: folder
         buildPhase: resources
