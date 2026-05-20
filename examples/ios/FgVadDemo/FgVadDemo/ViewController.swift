@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 /// fgvad iOS Demo 主视图。
 ///
@@ -36,12 +37,34 @@ final class ViewController: UIViewController {
 
     private let recordButton = UIButton(type: .system)
     private let loadTestAudioButton = UIButton(type: .system)
+    private let playSentencesButton = UIButton(type: .system)
     private let statusLabel = UILabel()
 
     // 处理中遮罩（runAnalyze 期间显示，吃掉点击）
     private let processingOverlay = UIView()
     private let processingIndicator = UIActivityIndicatorView(style: .large)
     private let processingLabel = UILabel()
+
+    // 试听 / 按句切分结果
+    private var audioPlayer: AVAudioPlayer?
+    private var lastWavURL: URL?
+    private var sentenceRecords: [SentenceRecord] = []
+
+    private struct SentenceRecord {
+        let index: Int
+        let startSample: UInt64
+        let endSample: UInt64
+        let endEvent: FgVadEvent
+        var startMs: Double { Double(startSample) / 16.0 }
+        var endMs: Double { Double(endSample) / 16.0 }
+        static func formatMs(_ ms: Double) -> String {
+            let total = Int(ms)
+            let m = total / 60_000
+            let s = (total % 60_000) / 1_000
+            let ms = total % 1_000
+            return String(format: "%02d:%02d.%03d", m, s, ms)
+        }
+    }
     private let logView = UITextView()
     private let versionLabel = UILabel()
 
@@ -111,6 +134,15 @@ final class ViewController: UIViewController {
         loadTestAudioButton.layer.cornerRadius = 10
         loadTestAudioButton.addTarget(self, action: #selector(showTestAudioPicker), for: .touchUpInside)
         view.addSubview(loadTestAudioButton)
+
+        playSentencesButton.setTitle("▶ 按句试听切分结果", for: .normal)
+        playSentencesButton.backgroundColor = .systemGray5
+        playSentencesButton.setTitleColor(.label, for: .normal)
+        playSentencesButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+        playSentencesButton.layer.cornerRadius = 10
+        playSentencesButton.addTarget(self, action: #selector(showSentencePicker), for: .touchUpInside)
+        playSentencesButton.isEnabled = false
+        view.addSubview(playSentencesButton)
 
         statusLabel.text = "就绪"
         statusLabel.font = .systemFont(ofSize: 14, weight: .medium)
@@ -262,7 +294,9 @@ final class ViewController: UIViewController {
         recordButton.frame = CGRect(x: inset, y: y + 6, width: width - inset * 2, height: 48)
         y = recordButton.frame.maxY + 8
 
-        loadTestAudioButton.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 36)
+        let halfW = (width - inset * 2 - 8) / 2
+        loadTestAudioButton.frame = CGRect(x: inset, y: y, width: halfW, height: 36)
+        playSentencesButton.frame = CGRect(x: inset + halfW + 8, y: y, width: halfW, height: 36)
         y = loadTestAudioButton.frame.maxY + 12
 
         statusLabel.frame = CGRect(x: inset, y: y, width: width - inset * 2, height: 38)
@@ -483,23 +517,121 @@ final class ViewController: UIViewController {
         }
 
         let sheet = UIAlertController(
-            title: "选一个测试音频跑批式 analyze",
-            message: "用当前模式 + 参数。短时素材建议在短时模式下跑。",
+            title: "选一个测试音频",
+            message: nil,
             preferredStyle: .actionSheet)
 
         for url in urls {
             sheet.addAction(UIAlertAction(title: url.lastPathComponent, style: .default) { [weak self] _ in
-                self?.runAnalyze(on: url)
+                self?.showFileActionSheet(for: url)
             })
         }
         sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
 
-        // iPad popover
         if let pop = sheet.popoverPresentationController {
             pop.sourceView = loadTestAudioButton
             pop.sourceRect = loadTestAudioButton.bounds
         }
         present(sheet, animated: true)
+    }
+
+    /// 第二步：选完文件后问"试听 / analyze"。
+    private func showFileActionSheet(for url: URL) {
+        let sheet = UIAlertController(
+            title: url.lastPathComponent,
+            message: "选择动作",
+            preferredStyle: .actionSheet)
+
+        sheet.addAction(UIAlertAction(title: "🔊 试听原音频", style: .default) { [weak self] _ in
+            self?.playOriginal(url: url)
+        })
+        sheet.addAction(UIAlertAction(title: "⚡️ 跑 VAD analyze（用当前模式 + 参数）", style: .default) { [weak self] _ in
+            self?.runAnalyze(on: url)
+        })
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let pop = sheet.popoverPresentationController {
+            pop.sourceView = loadTestAudioButton
+            pop.sourceRect = loadTestAudioButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    /// 直接播放原 WAV（无 analyze）。
+    private func playOriginal(url: URL) {
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            audioPlayer = try AVAudioPlayer(contentsOf: url)
+            audioPlayer?.play()
+            showToast("▶ 试听 \(url.lastPathComponent)")
+        } catch {
+            showToast("播放失败：\(error.localizedDescription)")
+        }
+    }
+
+    @objc private func showSentencePicker() {
+        guard !sentenceRecords.isEmpty, lastWavURL != nil else {
+            showToast("还没有切分结果，先跑一次 analyze")
+            return
+        }
+
+        let sheet = UIAlertController(
+            title: "按句试听（共 \(sentenceRecords.count) 句）",
+            message: nil,
+            preferredStyle: .actionSheet)
+
+        // 列表太长 ActionSheet 会很长，但 iOS UIAlertController 顶得住
+        // 几十条；超过这个量后就该换 UITableView。
+        for record in sentenceRecords {
+            let isForceCut = record.endEvent == FgVadEvent_SentenceForceCut
+            let tag = isForceCut ? " · ForceCut" : ""
+            let title = "Sentence \(record.index)  "
+                + "\(SentenceRecord.formatMs(record.startMs)) – \(SentenceRecord.formatMs(record.endMs))"
+                + tag
+            sheet.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.playSentence(record)
+            })
+        }
+        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
+
+        if let pop = sheet.popoverPresentationController {
+            pop.sourceView = playSentencesButton
+            pop.sourceRect = playSentencesButton.bounds
+        }
+        present(sheet, animated: true)
+    }
+
+    private func playSentence(_ record: SentenceRecord) {
+        guard let wavURL = lastWavURL else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            do {
+                let allSamples = try WavIO.readMonoInt16(from: wavURL)
+                let start = Int(record.startSample)
+                let end = min(Int(record.endSample), allSamples.count)
+                guard start < end else { return }
+                let sentSamples = Array(allSamples[start..<end])
+                let tmpURL = URL(fileURLWithPath: NSTemporaryDirectory())
+                    .appendingPathComponent("fgvad_sent_\(record.index).wav")
+                try WavIO.writeMonoInt16(sentSamples, sampleRate: 16_000, to: tmpURL)
+                DispatchQueue.main.async {
+                    do {
+                        try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+                        try AVAudioSession.sharedInstance().setActive(true)
+                        self.audioPlayer = try AVAudioPlayer(contentsOf: tmpURL)
+                        self.audioPlayer?.play()
+                        self.showToast("▶ Sentence \(record.index)")
+                    } catch {
+                        self.showToast("播放失败：\(error.localizedDescription)")
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.showToast("切片失败：\(error.localizedDescription)")
+                }
+            }
+        }
     }
 
     private func runAnalyze(on url: URL) {
@@ -527,23 +659,42 @@ final class ViewController: UIViewController {
                 return
             }
 
-            // 统计
+            // 统计 + 收集 sentence records 供按句试听
             var sentenceCount = 0
             var forceCutCount = 0
             var lines: [String] = []
+            var records: [SentenceRecord] = []
+            var curStart: UInt64? = nil
+
             for r in result.results {
                 if r.event != FgVadEvent_None_, let ev = r.event.label {
                     let tStart = Double(r.streamOffsetSample) / 16000.0
                     let tEnd = tStart + Double(r.audioLen) / 16000.0
                     lines.append(String(format: "  %.3fs-%.3fs %@", tStart, tEnd, ev))
-                    if r.event == FgVadEvent_SentenceStarted { sentenceCount += 1 }
+                }
+                if r.event == FgVadEvent_SentenceStarted {
+                    sentenceCount += 1
+                    curStart = r.streamOffsetSample
+                } else if r.event == FgVadEvent_SentenceEnded
+                            || r.event == FgVadEvent_SentenceForceCut {
                     if r.event == FgVadEvent_SentenceForceCut { forceCutCount += 1 }
+                    if let s = curStart {
+                        records.append(SentenceRecord(
+                            index: sentenceCount,
+                            startSample: s,
+                            endSample: r.streamOffsetSample + UInt64(r.audioLen),
+                            endEvent: r.event))
+                        curStart = nil
+                    }
                 }
             }
 
             let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
             DispatchQueue.main.async {
                 self.setProcessing(false)
+                self.lastWavURL = url
+                self.sentenceRecords = records
+                self.playSentencesButton.isEnabled = !records.isEmpty
                 for l in lines { self.appendLog(l) }
                 self.appendLog("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
                     + "\(result.finalState.label)/\(result.endReason.label) · \(elapsedMs)ms")
