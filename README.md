@@ -186,9 +186,11 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - **macOS universal（arm64 + x86_64）**：✅ 已支持。`scripts/build-macos-universal.sh`
   双架构 lipo，单产物兼容 Apple Silicon 和 Intel Mac。Demo bundle 嵌入的 fgvad
   已是 universal
-- **iOS（device + simulator）**：✅ 库构建链路已通。`scripts/build-ios.sh`
+- **iOS（device + simulator）**：✅ 库构建链路 + Demo 都已通。`scripts/build-ios.sh`
   同时产出 `aarch64-apple-ios`（device）和 `aarch64-apple-ios-sim`（simulator）
-  两份产物，链接对应平台的 ten_vad.framework。**XCFramework 打包脚本和 iOS Demo 待补**
+  两份产物，链接对应平台的 ten_vad.framework。`examples/ios/FgVadDemo/` 是
+  最小录音 demo，UIKit + 复用 OC RemoteIO AU 录音器，已验证在 iPhone 17 Pro
+  Simulator 跑得起来。**XCFramework 打包脚本待补**
 - **Android**：在路线图
 - **Linux / Windows / WASM**：暂不计划
 - **输入**：仅 16 kHz / 单声道 / i16 PCM
@@ -200,7 +202,8 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [ ] 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（Demo）
 - [ ] energy gate 前置过滤（噪声鲁棒性）
 - [x] iOS 库构建支持（device + simulator）
-- [ ] iOS Demo + XCFramework 打包
+- [x] iOS Demo（最小录音 + VAD）
+- [ ] iOS XCFramework 打包脚本（用于对外分发）
 - [ ] Android 构建支持（NDK + JNI bridge）
 - [ ] CocoaPods / SPM 分发
 
