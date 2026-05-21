@@ -4,21 +4,20 @@
 
 ## 核心交互模型（三平台对齐）
 
+**revised 2026-05-21**：取消 imported 段和文件导入入口，改为 recordings 段（mic 录音另存的原始 WAV）。Android 上 `adb push` 直接落到 recordings 目录，不再单独分 external 段。
+
 ```
 ┌────────────────────────────────────────────────────┐
-│ [+ 导入 WAV]                                       │  iOS / Android only
-├────────────────────────────────────────────────────┤
 │ — bundled —                                        │
 │ short/01-pure-silence-5s.wav    [▶ 预] [▶ 析]      │  read-only
 │ short/02-...                    [▶ 预] [▶ 析]      │
+│ long/yixi-zhuzhiwei.wav         [▶ 预] [▶ 析]      │  iOS / macOS bundle 进 app
 │ ...                                                │
 ├────────────────────────────────────────────────────┤
-│ — imported —    [清空]                             │  iOS / Android only
-│ my-recording.wav                [▶ 预] [▶ 析] [×]  │
+│ — recordings —                  [清空]             │
+│ recording_2026-05-21_19-30-45.wav [▶ 预] [▶ 析] [×]│  app mic 录的
+│ yixi-zhuzhiwei.wav              [▶ 预] [▶ 析] [×]  │  Android 上 adb push 也进这里
 │ ...                                                │
-├────────────────────────────────────────────────────┤
-│ — external (adb push) —                            │  Android only
-│ long/yixi-...                   [▶ 预] [▶ 析]      │
 └────────────────────────────────────────────────────┘
 ```
 
@@ -32,15 +31,34 @@
 - analyze 进行中：所有 ▶ 析 灰掉，▶ 预 仍可用
 - 录音模式（mic）启动时：整个选择器入口禁用
 
+## mic 录音另存原始 WAV（recordings 段的数据来源）
+
+要让 recordings 段有内容可选，mic 录音必须把原始 PCM 也写一份到沙盒：
+
+- 文件命名：`recording_<yyyy-MM-dd_HH-mm-ss>.wav`
+- 录音 start 时打开 WavWriter，写好 header（采样率 16kHz、mono、16-bit），录音 stop 时 finalize（回填 RIFF / data chunk size）
+- 写文件的 PCM tee 自现有的"喂 fgvad 的"那一路，单文件 IO 在录音线程或独立写文件线程都可
+- 三平台都做这件事——Android、iOS、macOS
+
+## iOS log 抽出方案
+
+macOS 我直接 Read `~/Library/Logs/FgVadDemo/run.log`，Android 我 `adb pull` 或 `adb logcat`。iOS 真机 log 没现成路径——本设计把它对齐其他两端：
+
+- iOS DemoLogger 复刻 Android 模式：`Documents/run.log`，app 启动 truncate
+- 加一个"导出日志"button 到主界面/picker 工具栏，触发 `UIActivityViewController` → 用户 Airdrop 给 Mac → Claude `Read` 落到 Mac 的文件
+- Info.plist 开 `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`：Documents 在 Files app 里可见，免按钮入口（同时 recordings 也能从这里 share 出去）
+
 ## 各平台实现要点
 
 ### iOS（UIKit）
 
-- 新建 `AudioPickerViewController`：UITableViewController，三段（bundled / imported），自定义 cell `AudioPickerCell`：title + 两个按钮（imported 段额外多 × 按钮）+ 段头的 `[+ 导入]` / `[清空]`
+- `AudioPickerViewController`：UITableViewController，两段（bundled / recordings），自定义 cell `AudioPickerCell`：title + 两个按钮（recordings 段额外多 × 按钮）+ recordings section header 的 `[清空]`
 - 现 `loadTestAudioButton` 触发 modal present
-- 系统文件选择：`UIDocumentPickerViewController(forOpeningContentTypes: [.wav, .audio])`，用户选完后把 NSURL 内容 copy 到 `Documents/imported/<name>.wav`。Files app 的 "On My iPhone → FgVad" 也能看到，是个意外加分入口
+- recordings 数据源：mic 录音另存的 `Documents/recordings/<timestamp>.wav`。**没有** UIDocumentPicker / 文件导入入口
 - 重构 `runAnalyze`：从同步 + processingOverlay 改成后台 dispatch + 主线程增量 reload。spinner 删掉
-- 文件管理：`Documents/imported/` 列表、删除单条、清空整段
+- 文件管理：`Documents/recordings/` 列表、删除单条、清空整段
+- WavWriter：mic 录音时 tee PCM 写文件，stop 时 finalize header
+- DemoLogger（新建，对齐 Android）：`Documents/run.log`，"导出日志"按钮 + UIFileSharingEnabled
 
 ### macOS（AppKit）
 
@@ -51,19 +69,19 @@
 
 ### Android（Views + RecyclerView）
 
-- 新建 `AudioPickerSheet`：`BottomSheetDialogFragment` 或 `Dialog` 自管理，里面 RecyclerView 多 section adapter
-- bundled / imported / external 三段，每段 header + items
-- 系统文件选择：`Intent(Intent.ACTION_OPEN_DOCUMENT).setType("audio/*")` + ActivityResult，回来把 InputStream copy 到 `getExternalFilesDir(null)/imported/<name>.wav`
-- external 段保留（adb push 路径不变），用得不多但留着不碍事
+- 新建 `AudioPickerSheet`：`BottomSheetDialogFragment` 或 `Dialog`，RecyclerView 多 section adapter
+- 两段：bundled（assets/short/）/ recordings（`getExternalFilesDir(null)/recordings/`）
+- recordings 数据源：① mic 录音 tee 原始 PCM → WAV ② `adb push` 也直接打到这个目录（取代之前的 long/ 单独段）
+- **没有** SAF 导入入口（用户要测自定义音频走 adb push 同一目录）
 - analyze 已经是流式，本轮不动
 
 ## 数据 / 文件布局
 
-| 平台 | bundled 来源 | imported 写到哪 | external |
-|---|---|---|---|
-| iOS | `App.app/short/*.wav` + `App.app/long/yixi-...wav`（Xcode resource bundle，commit `62a4d46` 已 bundle yixi） | `Documents/imported/` | — |
-| macOS | `App.app/Contents/Resources/short/*.wav` | — | — |
-| Android | `assets/short/*.wav` | `getExternalFilesDir(null)/imported/` | `getExternalFilesDir(null)/long/` |
+| 平台 | bundled 来源 | recordings 写到哪 |
+|---|---|---|
+| iOS | `App.app/short/*.wav` + `App.app/long/yixi-...wav` | `Documents/recordings/` |
+| macOS | `App.app/Contents/Resources/short/*.wav` + `App.app/Contents/Resources/long/yixi-...wav` | `~/Library/Containers/.../Documents/recordings/`（沙盒）或 `~/Documents/FgVadDemo/recordings/`（无沙盒） |
+| Android | `assets/short/*.wav` | `getExternalFilesDir(null)/recordings/`（同时也是 adb push 的目标） |
 
 ## 不在本轮范围
 
