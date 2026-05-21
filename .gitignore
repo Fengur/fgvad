@@ -8,3 +8,11 @@ Cargo.lock
 examples/android/fgvad-jni/target/
 # jniLibs 下的 .so 是构建产物，不入库
 examples/android/FgVadDemo/app/src/main/jniLibs/*/*.so
+# Android Studio / Gradle build artifacts
+examples/android/FgVadDemo/.gradle/
+examples/android/FgVadDemo/build/
+examples/android/FgVadDemo/app/build/
+examples/android/FgVadDemo/local.properties
+examples/android/FgVadDemo/.idea/
+examples/android/FgVadDemo/.kotlin/
+examples/android/FgVadDemo/app/.kotlin/
