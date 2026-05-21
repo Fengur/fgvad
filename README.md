@@ -222,6 +222,7 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [x] Android 构建支持（NDK + JNI bridge）
 - [x] Android Demo（含按句试听 + 测试 WAV 重跑）
 - [ ] CocoaPods / SPM 分发
+- [ ] 纯 C CLI 集成示例（验证 cbindgen 头文件在真实 C 编译里没 bug，给 Linux/embedded/C++ 集成方留个参考样板）
 
 ## License
 
