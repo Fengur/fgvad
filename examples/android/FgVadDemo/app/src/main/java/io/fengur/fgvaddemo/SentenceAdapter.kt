@@ -1,6 +1,9 @@
 package io.fengur.fgvaddemo
 
+import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
@@ -12,21 +15,25 @@ class SentenceAdapter : RecyclerView.Adapter<SentenceAdapter.VH>() {
     fun add(s: Sentence) { items.add(s); notifyItemInserted(items.size - 1) }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
-        val tv = TextView(parent.context).apply {
-            textSize = 13f
-            setPadding(8, 12, 8, 12)
-        }
-        return VH(tv)
+        val v = LayoutInflater.from(parent.context).inflate(R.layout.row_sentence, parent, false)
+        return VH(v)
     }
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val s = items[position]
-        holder.tv.text = "Sentence ${s.index} | ${s.endEvent} | ${formatMs(s.startMs)} - ${formatMs(s.endMs)}"
+        holder.title.text = "Sentence ${s.index} | ${s.endEvent} | ${formatMs(s.startMs)} - ${formatMs(s.endMs)}"
+        holder.play.isEnabled = s.audio != null
+        holder.play.setOnClickListener {
+            s.audio?.let { SentencePlayer.play(it) }
+        }
     }
 
     override fun getItemCount(): Int = items.size
 
-    class VH(val tv: TextView) : RecyclerView.ViewHolder(tv)
+    class VH(view: View) : RecyclerView.ViewHolder(view) {
+        val title: TextView = view.findViewById(R.id.sentenceTitle)
+        val play: Button = view.findViewById(R.id.playBtn)
+    }
 
     companion object {
         fun formatMs(ms: Double): String {
