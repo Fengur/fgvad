@@ -61,7 +61,7 @@
 
 | 平台 | bundled 来源 | imported 写到哪 | external |
 |---|---|---|---|
-| iOS | `App.app/short/*.wav`（Xcode resource bundle） | `Documents/imported/` | — |
+| iOS | `App.app/short/*.wav` + `App.app/long/yixi-...wav`（Xcode resource bundle，commit `62a4d46` 已 bundle yixi） | `Documents/imported/` | — |
 | macOS | `App.app/Contents/Resources/short/*.wav` | — | — |
 | Android | `assets/short/*.wav` | `getExternalFilesDir(null)/imported/` | `getExternalFilesDir(null)/long/` |
 
