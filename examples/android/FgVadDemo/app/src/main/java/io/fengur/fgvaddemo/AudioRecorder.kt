@@ -48,9 +48,9 @@ class AudioRecorder(private val onPcm: (samples: ShortArray, count: Int) -> Unit
     fun stop() {
         if (!running) return
         running = false
+        rec?.stop()                  // signal blocked read() to return
         thread?.join(500)
         thread = null
-        rec?.stop()
         rec?.release()
         rec = null
     }
