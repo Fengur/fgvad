@@ -27,6 +27,10 @@ class MainActivity : AppCompatActivity() {
 
     private var vad: FgVad? = null
     private var sentenceCount = 0
+    private var wavWriter: WavWriter? = null
+
+    private fun recordingsDir(): java.io.File =
+        java.io.File(getExternalFilesDir(null), "recordings").also { it.mkdirs() }
 
     // 短时参数
     private val shortHead = NumField("head_silence_timeout", "3000")
@@ -170,6 +174,20 @@ class MainActivity : AppCompatActivity() {
             )
         }
         vad!!.start()
+
+        // tee mic PCM 到 WAV 文件
+        val ts = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US)
+            .format(java.util.Date())
+        val wavFile = java.io.File(recordingsDir(), "recording_$ts.wav")
+        wavWriter = try {
+            WavWriter(wavFile).also {
+                logger.i("wav", "WavWriter opened: ${wavFile.absolutePath}")
+            }
+        } catch (t: Throwable) {
+            logger.w("wav", "WavWriter init failed: ${t.message}")
+            null
+        }
+
         recorder.start()
         recordBtn.text = "停止录音"
         statusLabel.text = "状态：录音中 · 0 句"
@@ -183,6 +201,10 @@ class MainActivity : AppCompatActivity() {
         logger.i("App", "session stop endReason=$end ($reason)")
         vad?.close()
         vad = null
+        try { wavWriter?.finalize() } catch (t: Throwable) {
+            logger.e("wav", "finalize failed: ${t.message}")
+        }
+        wavWriter = null
         recordBtn.text = "开始录音"
         ui.post { statusLabel.text = "状态：${reasonText(end)} · $sentenceCount 句" }
     }
@@ -197,6 +219,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPcm(samples: ShortArray, count: Int) {
         val v = vad ?: return
+        try { wavWriter?.append(samples, count) } catch (t: Throwable) {
+            logger.e("wav", "append failed: ${t.message}")
+        }
         val results = v.process(samples, count)
         if (results.isEmpty()) return
         ui.post { handleResults(results) }
@@ -227,43 +252,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoadAudioDialog() {
-        val items = mutableListOf<Pair<String, () -> java.io.InputStream>>()
-
-        // 1) bundled assets
-        val list = assets.list("short") ?: emptyArray()
-        for (name in list.sorted()) {
-            items.add("[assets] short/$name" to { assets.open("short/$name") })
+        val sheet = AudioPickerSheet()
+        sheet.onPreview = { label, samples ->
+            logger.i("Picker", "preview $label (${samples.size} samples)")
+            SentencePlayer.play(samples)
         }
-
-        // 2) external long
-        val longDir = java.io.File(getExternalFilesDir(null), "long")
-        if (longDir.exists()) {
-            for (f in longDir.listFiles { _, n -> n.endsWith(".wav") } ?: emptyArray()) {
-                items.add("[external] long/${f.name}" to { f.inputStream() })
-            }
+        sheet.onAnalyze = { label, samples ->
+            runAnalyze(label, samples)
         }
-
-        if (items.isEmpty()) {
-            Toast.makeText(this, "无测试音频。先 adb push 到 long/，或确认 assets/short/ 有 WAV。", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val labels = items.map { it.first }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle("选择测试音频")
-            .setItems(labels) { _, idx ->
-                val (label, opener) = items[idx]
-                Thread {
-                    try {
-                        val pcm = opener().use { WavReader.read(it) }
-                        ui.post { runAnalyze(label, pcm) }
-                    } catch (e: Throwable) {
-                        logger.e("App", "wav read failed: ${e.message}")
-                        ui.post { Toast.makeText(this, "读 WAV 失败: ${e.message}", Toast.LENGTH_LONG).show() }
-                    }
-                }.start()
-            }
-            .show()
+        sheet.show(supportFragmentManager, "AudioPickerSheet")
     }
 
     private fun runAnalyze(label: String, pcm: ShortArray) {

@@ -14,6 +14,8 @@ final class MainWindowController: NSWindowController {
     private var analyzer: FgVadAnalyzer?
     private var mode: Mode = .short
     private var sentenceCount = 0
+    private var wavWriter: WavWriter?
+    private var currentWavURL: URL?
 
     // MARK: - Views
     private let modeSegmented = NSSegmentedControl(
@@ -42,8 +44,12 @@ final class MainWindowController: NSWindowController {
 
     // 操作按钮 & 状态
     private let recordButton = NSButton(title: "开始录音", target: nil, action: nil)
+    private let pickerButton = NSButton(title: "测试音频", target: nil, action: nil)
     private let loadWavButton = NSButton(title: "加载 WAV 重跑", target: nil, action: nil)
     private let openFolderButton = NSButton(title: "录音目录", target: nil, action: nil)
+
+    // MARK: - Audio Picker
+    private var pickerWindowController: AudioPickerWindowController?
     private let statusLabel = NSTextField(labelWithString: "就绪")
     private let liveStateLabel = NSTextField(labelWithString: "")
     private let lastFileLabel = NSTextField(labelWithString: "")
@@ -62,6 +68,9 @@ final class MainWindowController: NSWindowController {
     private var currentSentenceStartSample: UInt64? = nil
     private var lastWavURL: URL? = nil
     private var audioPlayer: AVAudioPlayer? = nil
+
+    // MARK: - Analyze 重入守卫
+    private var isAnalyzing = false
 
     // MARK: - Status stack (stored for constraint chaining)
     private let statusStack = NSStackView()
@@ -130,13 +139,16 @@ final class MainWindowController: NSWindowController {
         recordButton.action = #selector(toggleRecording(_:))
         recordButton.keyEquivalent = " "
         recordButton.controlSize = .large
+        pickerButton.bezelStyle = .rounded
+        pickerButton.target = self
+        pickerButton.action = #selector(showAudioPicker(_:))
         loadWavButton.bezelStyle = .rounded
         loadWavButton.target = self
         loadWavButton.action = #selector(loadWavAndRerun(_:))
         openFolderButton.bezelStyle = .rounded
         openFolderButton.target = self
         openFolderButton.action = #selector(openRecordingsFolder)
-        let buttonsRow = NSStackView(views: [recordButton, loadWavButton, openFolderButton])
+        let buttonsRow = NSStackView(views: [recordButton, pickerButton, loadWavButton, openFolderButton])
         buttonsRow.orientation = .horizontal
         buttonsRow.spacing = 12
         content.addSubview(buttonsRow)
@@ -399,6 +411,7 @@ final class MainWindowController: NSWindowController {
         sentenceRecords = []
         currentSentenceStartSample = nil
         lastWavURL = nil
+        currentWavURL = nil
         clearSentenceList()
 
         recorder.onChunk = { [weak self] chunk in
@@ -417,7 +430,23 @@ final class MainWindowController: NSWindowController {
             return
         }
 
+        // 创建 WavWriter，tee mic PCM 到 recordings/
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let filename = "recording_\(formatter.string(from: Date())).wav"
+        let wavURL = Recorder.recordingsDirectory()
+            .appendingPathComponent("recordings", isDirectory: true)
+            .appendingPathComponent(filename)
+        do {
+            wavWriter = try WavWriter(url: wavURL)
+            currentWavURL = wavURL
+            DemoLog.log("WavWriter opened: \(wavURL.lastPathComponent)")
+        } catch {
+            DemoLog.log("WavWriter init failed: \(error) — recording continues without file save")
+        }
+
         recordButton.title = "停止录音"
+        pickerButton.isEnabled = false
         modeSegmented.isEnabled = false
         shortConfigBox.isHidden = true  // 录音中隐藏 config 防止误改
         longConfigBox.isHidden = true
@@ -442,6 +471,16 @@ final class MainWindowController: NSWindowController {
 
     private func handleChunk(_ chunk: UnsafeBufferPointer<Int16>) {
         guard let analyzer else { return }
+
+        // tee PCM 到 WavWriter（失败不影响 analyze 主流程）
+        if let writer = wavWriter, let base = chunk.baseAddress {
+            do {
+                try writer.append(samples: base, count: chunk.count)
+            } catch {
+                DemoLog.log("WavWriter append failed: \(error)")
+            }
+        }
+
         let results: [FgVadAnalyzer.Result]
         do {
             results = try analyzer.feed(chunk)
@@ -503,16 +542,23 @@ final class MainWindowController: NSWindowController {
         tickTimer?.invalidate()
         tickTimer = nil
         recordingStartDate = nil
-        let duration: Double
+
+        // 收尾 WavWriter（回填 RIFF/data chunk size）
         do {
-            let url = try recorder.stopAndSave()
-            lastWavURL = url
-            duration = Double(recorder.lastRecordedSampleCount) / 16000.0
+            try wavWriter?.finalize()
+        } catch {
+            DemoLog.log("WavWriter finalize failed: \(error)")
+        }
+        wavWriter = nil
+
+        recorder.stop()
+        lastWavURL = currentWavURL
+        let duration = Double(recorder.lastRecordedSampleCount) / 16000.0
+        if let url = currentWavURL {
             lastFileLabel.stringValue = String(
                 format: "%.2fs · %@", duration, url.lastPathComponent)
-        } catch {
-            duration = 0
-            lastFileLabel.stringValue = "保存失败：\(error)"
+        } else {
+            lastFileLabel.stringValue = String(format: "%.2fs", duration)
         }
 
         let finalState = analyzer?.state ?? FgVadState_Idle
@@ -520,6 +566,7 @@ final class MainWindowController: NSWindowController {
         analyzer = nil
 
         recordButton.title = "开始录音"
+        pickerButton.isEnabled = true
         modeSegmented.isEnabled = true
         applyMode(mode)  // 恢复 config 可见性
         statusLabel.stringValue = Self.summaryText(
@@ -569,80 +616,175 @@ final class MainWindowController: NSWindowController {
     }
 
     private func rerunOnFile(_ url: URL) {
-        statusLabel.stringValue = "读取 WAV…"
-        liveStateLabel.stringValue = ""
+        // 重入守卫：主线程读写
+        guard !isAnalyzing else {
+            DemoLog.log("rerunOnFile: already analyzing, skip")
+            return
+        }
+        isAnalyzing = true
+        progressSpinner.startAnimation(nil)
+
+        // 主线程：清空结果，更新状态，仅禁 loadWavButton（不阻塞其他交互）
+        sentenceRecords = []
         clearSentenceList()
-        setProcessing(true)
+        lastWavURL = url
+        lastFileLabel.stringValue = url.lastPathComponent
+        statusLabel.stringValue = "状态：解析中… 0 句"
+        liveStateLabel.stringValue = ""
+        loadWavButton.isEnabled = false
+        DemoLog.log("rerunOnFile: start file=\(url.lastPathComponent) mode=\(mode == .short ? "short" : "long")")
+
+        let analyzerMode = currentAnalyzerMode()
+        let started = Date()
+
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
+
+            // 读 WAV（I/O，快）
+            let samples: [Int16]
             do {
-                let samples = try WavIO.readMonoInt16(from: url)
-                DemoLog.log("rerun: file=\(url.lastPathComponent) "
-                    + "samples=\(samples.count) "
-                    + "(\(String(format: "%.2f", Double(samples.count)/16000.0))s) "
-                    + "mode=\(self.mode == .short ? "short" : "long")")
-                let analyzerMode = self.currentAnalyzerMode()
-                let (results, finalState, endReason) =
-                    try FgVadAnalyzer.analyze(samples: samples, mode: analyzerMode)
-                var sent = 0
-                var records: [SentenceRecord] = []
-                var currentStart: UInt64? = nil
-                for (i, r) in results.enumerated() {
-                    if r.event != FgVadEvent_None_ {
-                        DemoLog.log("[#\(i)] " + Self.formatResult(r))
+                samples = try WavIO.readMonoInt16(from: url)
+            } catch {
+                DemoLog.log("rerunOnFile: read WAV failed: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.isAnalyzing = false
+                    self.loadWavButton.isEnabled = true
+                    self.progressSpinner.stopAnimation(nil)
+                    self.statusLabel.stringValue = "重跑失败：\(error)"
+                }
+                return
+            }
+            DemoLog.log(String(format: "rerunOnFile: samples=%d (%.2fs)",
+                               samples.count, Double(samples.count) / 16000.0))
+
+            // 创建 FgVadAnalyzer 实例
+            let vad: FgVadAnalyzer
+            do {
+                vad = try FgVadAnalyzer(mode: analyzerMode)
+            } catch {
+                DemoLog.log("rerunOnFile: create vad failed: \(error)")
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.isAnalyzing = false
+                    self.loadWavButton.isEnabled = true
+                    self.progressSpinner.stopAnimation(nil)
+                    self.statusLabel.stringValue = "重跑失败：创建 VAD 实例失败"
+                }
+                return
+            }
+            vad.start()
+
+            // chunk-stream 核心循环（chunkSize 与 iOS/Android 对齐）
+            let chunkSize = 1024
+            var sentenceCount = 0
+            var forceCutCount = 0
+            var curStart: UInt64? = nil
+            var offset = 0
+
+            while offset < samples.count {
+                let end = min(offset + chunkSize, samples.count)
+                let slice = Array(samples[offset..<end])
+                offset = end
+
+                let results: [FgVadAnalyzer.Result]
+                do {
+                    results = try slice.withUnsafeBufferPointer { try vad.feed($0) }
+                } catch {
+                    DemoLog.log("rerunOnFile: feed failed: \(error)")
+                    vad.stop()
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.isAnalyzing = false
+                        self.loadWavButton.isEnabled = true
+                        self.progressSpinner.stopAnimation(nil)
+                        self.statusLabel.stringValue = "重跑失败：\(error)"
                     }
+                    return
+                }
+
+                for r in results {
+                    if r.event != FgVadEvent_None_ {
+                        DemoLog.log(Self.formatResult(r))
+                    }
+
                     if r.event == FgVadEvent_SentenceStarted {
-                        sent += 1
-                        currentStart = r.streamOffsetSample
+                        curStart = r.streamOffsetSample
+
                     } else if r.event == FgVadEvent_SentenceEnded
                                 || r.event == FgVadEvent_SentenceForceCut {
-                        if let start = currentStart {
-                            records.append(SentenceRecord(
-                                index: sent,
-                                startSample: start,
+                        if r.event == FgVadEvent_SentenceForceCut { forceCutCount += 1 }
+                        if let s = curStart {
+                            sentenceCount += 1
+                            let record = SentenceRecord(
+                                index: sentenceCount,
+                                startSample: s,
                                 endSample: r.streamOffsetSample + UInt64(r.audioLen),
-                                endEvent: r.event))
-                            currentStart = nil
+                                endEvent: r.event)
+                            curStart = nil
+                            let count = sentenceCount  // capture value
+                            // 主线程：逐句 append + insertRow（流式增量更新）
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self else { return }
+                                self.sentenceRecords.append(record)
+                                self.addSentenceRow(record)
+                                self.statusLabel.stringValue = "状态：解析中… \(count) 句"
+                            }
                         }
                     }
                 }
-                DemoLog.log("rerun done: \(sent) 句 finalState=\(finalState.label) "
-                    + "endReason=\(endReason.label)")
-                let summary = "重跑完成 · \(sent) 句 · "
-                    + "\(finalState.label)/\(endReason.label)"
-                DispatchQueue.main.async {
-                    self.lastWavURL = url
-                    self.sentenceRecords = records
-                    for rec in records { self.addSentenceRow(rec) }
-                    self.statusLabel.stringValue = summary
-                    self.lastFileLabel.stringValue = url.lastPathComponent
-                    self.setProcessing(false)
-                }
-            } catch {
-                DemoLog.log("rerun failed: \(error)")
-                let errMsg = "重跑失败：\(error)"
-                DispatchQueue.main.async {
-                    self.statusLabel.stringValue = errMsg
-                    self.lastFileLabel.stringValue = url.lastPathComponent
-                    self.setProcessing(false)
-                }
+            }
+
+            vad.stop()
+            let finalEndReason = vad.endReason
+            let finalState = vad.state
+            let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
+
+            DemoLog.log("rerunOnFile: done \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
+                + "\(finalState.label)/\(finalEndReason.label) · \(elapsedMs)ms")
+
+            // 完成：主线程清守卫、恢复按钮、更新 status
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isAnalyzing = false
+                self.loadWavButton.isEnabled = true
+                self.progressSpinner.stopAnimation(nil)
+                self.statusLabel.stringValue = "重跑完成 · \(sentenceCount) 句 · \(finalEndReason.label)"
             }
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Audio Picker
 
-    /// 长任务（重跑）期间锁住可能干扰结果的交互入口，并启停 spinner。
-    private func setProcessing(_ processing: Bool) {
-        if processing {
-            progressSpinner.startAnimation(nil)
-        } else {
-            progressSpinner.stopAnimation(nil)
+    @objc private func showAudioPicker(_ sender: Any?) {
+        guard !recorder.isRecording else { return }
+        let picker = AudioPickerWindowController()
+        picker.onPreview = { [weak self] url in
+            self?.playWAV(url)
         }
-        recordButton.isEnabled = !processing
-        loadWavButton.isEnabled = !processing
-        openFolderButton.isEnabled = !processing
-        modeSegmented.isEnabled = !processing
+        picker.onAnalyze = { [weak self] url in
+            self?.rerunOnFile(url)
+        }
+        pickerWindowController = picker
+        guard let pickerWindow = picker.window, let mainWindow = window else { return }
+        mainWindow.beginSheet(pickerWindow) { [weak self] _ in
+            self?.pickerWindowController = nil
+        }
+    }
+
+    private func playWAV(_ url: URL) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                self?.audioPlayer?.stop()
+                let player = try AVAudioPlayer(contentsOf: url)
+                DispatchQueue.main.async {
+                    self?.audioPlayer = player
+                    player.play()
+                }
+            } catch {
+                DemoLog.log("playWAV failed: \(error)")
+            }
+        }
     }
 
     private func currentAnalyzerMode() -> FgVadAnalyzer.Mode {

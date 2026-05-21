@@ -72,7 +72,9 @@ final class ViewController: UIViewController {
 
     private let recorder = FGIOSRecorder()
     private var analyzer: FgVadAnalyzer?
+    private var wavWriter: WavWriter?
     private var sentenceCount = 0
+    private var isAnalyzing: Bool = false
     private var startDate: Date?
     private var tickTimer: Timer?
 
@@ -360,6 +362,19 @@ final class ViewController: UIViewController {
             return
         }
 
+        // 创建 WavWriter，tee mic PCM 到 Documents/recordings/
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let filename = "recording_\(formatter.string(from: Date())).wav"
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let wavURL = docs.appendingPathComponent("recordings/\(filename)")
+        do {
+            wavWriter = try WavWriter(url: wavURL)
+            DemoLogger.shared.i("wav", "WavWriter opened: \(wavURL.lastPathComponent)")
+        } catch {
+            DemoLogger.shared.w("wav", "WavWriter init failed: \(error) — recording continues without file save")
+        }
+
         startDate = Date()
         tickTimer?.invalidate()
         tickTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -376,6 +391,14 @@ final class ViewController: UIViewController {
     private func stopRecording(reason: String) {
         analyzer?.stop()
         recorder.stop()
+
+        // 收尾 WAV 文件，回填 header size 字段
+        do {
+            try wavWriter?.finalize()
+        } catch {
+            DemoLogger.shared.e("wav", "finalize failed: \(error)")
+        }
+        wavWriter = nil
 
         let finalState = analyzer?.state ?? FgVadState_Idle
         let endReason = analyzer?.endReason ?? FgVadEndReason_None_
@@ -403,9 +426,9 @@ final class ViewController: UIViewController {
         )
     }
 
-    /// 控制台日志（Xcode debug console / Console.app 可见），不再占用 UI 空间。
+    /// 控制台日志：同时写 Documents/run.log 和 Xcode console。
     private func log(_ msg: String) {
-        NSLog("[FgVadDemo] %@", msg)
+        DemoLogger.shared.i("VC", msg)
     }
 
     /// 更新 sentenceRecords + 同步 table view + empty state 显示。
@@ -440,25 +463,6 @@ final class ViewController: UIViewController {
 
     private func parseU32(_ field: UITextField, _ fallback: UInt32) -> UInt32 {
         UInt32(field.text ?? "") ?? fallback
-    }
-
-    // MARK: - Test audio picker (batch analyze on bundled WAVs)
-
-    private func bundledTestAudioURLs() -> [URL] {
-        // project.yml 把 test-data/short/ 和 test-data/long/ 当 folder
-        // reference 打成 .app/short/ 和 .app/long/（folder reference 保留
-        // 源目录名）。
-        var urls: [URL] = []
-        for sub in ["short", "long"] {
-            guard let dir = Bundle.main.url(forResource: sub, withExtension: nil) else { continue }
-            let files = (try? FileManager.default.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: nil)) ?? []
-            urls.append(contentsOf:
-                files.filter { $0.pathExtension.lowercased() == "wav" }
-                     .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            )
-        }
-        return urls
     }
 
     /// 处理中遮罩开关——同时禁用关键交互入口。
@@ -517,51 +521,15 @@ final class ViewController: UIViewController {
 
     @objc private func showTestAudioPicker() {
         guard !recorder.isRecording else { return }
-        let urls = bundledTestAudioURLs()
-        guard !urls.isEmpty else {
-            statusLabel.text = "未找到 bundled 测试音频"
-            return
-        }
-
-        let sheet = UIAlertController(
-            title: "选一个测试音频",
-            message: nil,
-            preferredStyle: .actionSheet)
-
-        for url in urls {
-            sheet.addAction(UIAlertAction(title: url.lastPathComponent, style: .default) { [weak self] _ in
-                self?.showFileActionSheet(for: url)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = loadTestAudioButton
-            pop.sourceRect = loadTestAudioButton.bounds
-        }
-        present(sheet, animated: true)
-    }
-
-    /// 第二步：选完文件后问"试听 / analyze"。
-    private func showFileActionSheet(for url: URL) {
-        let sheet = UIAlertController(
-            title: url.lastPathComponent,
-            message: "选择动作",
-            preferredStyle: .actionSheet)
-
-        sheet.addAction(UIAlertAction(title: "🔊 试听原音频", style: .default) { [weak self] _ in
+        let picker = AudioPickerViewController()
+        picker.onPreview = { [weak self] url in
             self?.playOriginal(url: url)
-        })
-        sheet.addAction(UIAlertAction(title: "⚡️ 跑 VAD analyze（用当前模式 + 参数）", style: .default) { [weak self] _ in
-            self?.runAnalyze(on: url)
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = loadTestAudioButton
-            pop.sourceRect = loadTestAudioButton.bounds
         }
-        present(sheet, animated: true)
+        picker.onAnalyze = { [weak self] url in
+            self?.runAnalyze(on: url)
+        }
+        let nav = UINavigationController(rootViewController: picker)
+        present(nav, animated: true)
     }
 
     /// 直接播放原 WAV（无 analyze）。
@@ -610,74 +578,149 @@ final class ViewController: UIViewController {
     }
 
     private func runAnalyze(on url: URL) {
-        statusLabel.text = "读取 \(url.lastPathComponent)…"
-        log("[rerun] file=\(url.lastPathComponent) mode=\(currentMode == .short ? "short" : "long")")
-        setProcessing(true, hint: "处理中…\n\(url.lastPathComponent)")
+        guard !isAnalyzing else {
+            showToast("解析进行中，请稍候")
+            return
+        }
+        isAnalyzing = true
+        recordButton.isEnabled = false
+        loadTestAudioButton.isEnabled = false
+
+        let filename = url.lastPathComponent
+        let modeLabel = currentMode == .short ? "short" : "long"
+        log("[rerun] file=\(filename) mode=\(modeLabel)")
+
+        // 主线程：清空结果，更新状态栏，关闭遮罩（流式过程不 block UI）
+        sentenceRecords = []
+        sentenceTable.reloadData()
+        emptyStateLabel.isHidden = false
+        statusLabel.text = "状态：解析中… 0 句 (\(filename))"
+        lastWavURL = url
 
         let mode = currentAnalyzerMode()
         let started = Date()
 
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
-            let result: (results: [FgVadAnalyzer.Result], finalState: FgVadState, endReason: FgVadEndReason)
+
+            // 读 WAV（快，仅 I/O，几十毫秒）
+            let samples: [Int16]
             do {
-                let samples = try WavIO.readMonoInt16(from: url)
-                result = try FgVadAnalyzer.analyze(samples: samples, mode: mode)
+                samples = try WavIO.readMonoInt16(from: url)
             } catch {
                 DispatchQueue.main.async {
-                    self.setProcessing(false)
-                    self.statusLabel.text = "失败：\(error)"
-                    self.log("[rerun error] \(error)")
+                    self.isAnalyzing = false
+                    self.recordButton.isEnabled = true
+                    self.loadTestAudioButton.isEnabled = true
+                    self.statusLabel.text = "失败：\(error.localizedDescription)"
+                    self.log("[rerun error] read WAV: \(error)")
                     self.showToast("失败：\(error.localizedDescription)")
                 }
                 return
             }
+            self.log("[rerun] samples=\(samples.count) (\(String(format: "%.1f", Double(samples.count)/16000.0))s)")
 
-            // 统计 + 收集 sentence records 供按句试听
-            var sentenceCount = 0
-            var forceCutCount = 0
-            var lines: [String] = []
-            var records: [SentenceRecord] = []
-            var curStart: UInt64? = nil
-
-            for r in result.results {
-                if r.event != FgVadEvent_None_, let ev = r.event.label {
-                    let tStart = Double(r.streamOffsetSample) / 16000.0
-                    let tEnd = tStart + Double(r.audioLen) / 16000.0
-                    lines.append(String(format: "  %.3fs-%.3fs %@", tStart, tEnd, ev))
+            // 流式喂入 VAD
+            let vad: FgVadAnalyzer
+            do {
+                vad = try FgVadAnalyzer(mode: mode)
+            } catch {
+                DispatchQueue.main.async {
+                    self.isAnalyzing = false
+                    self.recordButton.isEnabled = true
+                    self.loadTestAudioButton.isEnabled = true
+                    self.statusLabel.text = "失败：create vad"
+                    self.log("[rerun error] create vad: \(error)")
+                    self.showToast("失败：无法创建 VAD 实例")
                 }
-                if r.event == FgVadEvent_SentenceStarted {
-                    sentenceCount += 1
-                    curStart = r.streamOffsetSample
-                } else if r.event == FgVadEvent_SentenceEnded
-                            || r.event == FgVadEvent_SentenceForceCut {
-                    if r.event == FgVadEvent_SentenceForceCut { forceCutCount += 1 }
-                    if let s = curStart {
-                        records.append(SentenceRecord(
-                            index: sentenceCount,
-                            startSample: s,
-                            endSample: r.streamOffsetSample + UInt64(r.audioLen),
-                            endEvent: r.event))
-                        curStart = nil
+                return
+            }
+            vad.start()
+
+            // chunk-stream 核心循环
+            let chunkSize = 1024
+            var sentenceCount = 0      // 背景线程本地计数器
+            var forceCutCount = 0
+            var curStart: UInt64? = nil
+            var offset = 0
+
+            while offset < samples.count {
+                let end = min(offset + chunkSize, samples.count)
+                let slice = Array(samples[offset..<end])
+                offset = end
+
+                let results: [FgVadAnalyzer.Result]
+                do {
+                    results = try slice.withUnsafeBufferPointer { try vad.feed($0) }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.isAnalyzing = false
+                        self.recordButton.isEnabled = true
+                        self.loadTestAudioButton.isEnabled = true
+                        self.statusLabel.text = "失败：\(error.localizedDescription)"
+                        self.log("[rerun error] feed: \(error)")
+                        self.showToast("失败：\(error.localizedDescription)")
+                    }
+                    vad.stop()
+                    return
+                }
+
+                for r in results {
+                    // 记日志（非 None 事件）
+                    if r.event != FgVadEvent_None_, let ev = r.event.label {
+                        let tStart = Double(r.streamOffsetSample) / 16000.0
+                        let tEnd = tStart + Double(r.audioLen) / 16000.0
+                        self.log(String(format: "  %.3fs-%.3fs %@", tStart, tEnd, ev))
+                    }
+
+                    if r.event == FgVadEvent_SentenceStarted {
+                        curStart = r.streamOffsetSample
+
+                    } else if r.event == FgVadEvent_SentenceEnded
+                                || r.event == FgVadEvent_SentenceForceCut {
+                        if r.event == FgVadEvent_SentenceForceCut { forceCutCount += 1 }
+                        if let s = curStart {
+                            sentenceCount += 1
+                            let record = SentenceRecord(
+                                index: sentenceCount,
+                                startSample: s,
+                                endSample: r.streamOffsetSample + UInt64(r.audioLen),
+                                endEvent: r.event)
+                            curStart = nil
+                            let count = sentenceCount   // capture value
+                            // 主线程：单点插入一行，保留滚动状态
+                            DispatchQueue.main.async { [weak self] in
+                                guard let self else { return }
+                                self.sentenceRecords.append(record)
+                                let idx = IndexPath(row: self.sentenceRecords.count - 1, section: 0)
+                                self.sentenceTable.insertRows(at: [idx], with: .none)
+                                self.emptyStateLabel.isHidden = true
+                                self.statusLabel.text = "状态：解析中… \(count) 句"
+                            }
+                        }
                     }
                 }
             }
 
+            vad.stop()
+            let finalEndReason = vad.endReason
+            let finalState = vad.state
             let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
-            DispatchQueue.main.async {
-                self.setProcessing(false)
-                self.lastWavURL = url
-                self.applySentenceRecords(records)
-                for l in lines { self.log(l) }
-                self.log("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
-                    + "\(result.finalState.label)/\(result.endReason.label) · \(elapsedMs)ms")
-                self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(result.endReason.label)"
 
+            self.log("[rerun done] \(sentenceCount) 句 · \(forceCutCount) ForceCut · "
+                + "\(finalState.label)/\(finalEndReason.label) · \(elapsedMs)ms")
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isAnalyzing = false
+                self.recordButton.isEnabled = true
+                self.loadTestAudioButton.isEnabled = true
+                self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(finalEndReason.label)"
                 let toastMsg: String
                 if forceCutCount > 0 {
                     toastMsg = "✓ \(sentenceCount) 句 · \(forceCutCount) ForceCut\n\(elapsedMs)ms"
                 } else {
-                    toastMsg = "✓ \(sentenceCount) 句 · \(result.endReason.label)\n\(elapsedMs)ms"
+                    toastMsg = "✓ \(sentenceCount) 句 · \(finalEndReason.label)\n\(elapsedMs)ms"
                 }
                 self.showToast(toastMsg, duration: 2.2)
             }
@@ -693,6 +736,14 @@ extension ViewController: FGIOSRecorderDelegate {
                   didProduceFrames frames: UnsafePointer<Int16>,
                   count: UInt) {
         guard let analyzer else { return }
+
+        // tee PCM 到 WavWriter（失败不影响 analyze 主流程）
+        do {
+            try wavWriter?.append(samples: frames, count: Int(count))
+        } catch {
+            DemoLogger.shared.e("wav", "append failed: \(error)")
+        }
+
         let buffer = UnsafeBufferPointer(start: frames, count: Int(count))
         let results: [FgVadAnalyzer.Result]
         do {
@@ -706,7 +757,8 @@ extension ViewController: FGIOSRecorderDelegate {
             if r.event != FgVadEvent_None_, let ev = r.event.label {
                 let tStart = Double(r.streamOffsetSample) / 16000.0
                 log(String(format: "  %.3fs %@", tStart, ev))
-                if r.event == FgVadEvent_SentenceStarted {
+                if r.event == FgVadEvent_SentenceEnded
+                    || r.event == FgVadEvent_SentenceForceCut {
                     sentenceCount += 1
                 }
             }

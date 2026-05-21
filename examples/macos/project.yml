@@ -28,6 +28,16 @@ targets:
         NSPrincipalClass: NSApplication
     sources:
       - path: FgVadDemo
+      # 把 test-data 整套（short 6 个 case + long）作为 folder reference
+      # 打包进 .app/Contents/Resources/short/ 和 long/。
+      - path: ../../test-data/short
+        group: TestAudio
+        type: folder
+        buildPhase: resources
+      - path: ../../test-data/long
+        group: TestAudio
+        type: folder
+        buildPhase: resources
     settings:
       base:
         SWIFT_OBJC_BRIDGING_HEADER: FgVadDemo-Bridging-Header.h
