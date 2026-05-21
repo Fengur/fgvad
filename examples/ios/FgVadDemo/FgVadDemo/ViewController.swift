@@ -72,6 +72,7 @@ final class ViewController: UIViewController {
 
     private let recorder = FGIOSRecorder()
     private var analyzer: FgVadAnalyzer?
+    private var wavWriter: WavWriter?
     private var sentenceCount = 0
     private var startDate: Date?
     private var tickTimer: Timer?
@@ -360,6 +361,18 @@ final class ViewController: UIViewController {
             return
         }
 
+        // 创建 WavWriter，tee mic PCM 到 Documents/recordings/
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let filename = "recording_\(formatter.string(from: Date())).wav"
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let wavURL = docs.appendingPathComponent("recordings/\(filename)")
+        do {
+            wavWriter = try WavWriter(url: wavURL)
+        } catch {
+            log("[wav] WavWriter init failed: \(error) — recording continues without file save")
+        }
+
         startDate = Date()
         tickTimer?.invalidate()
         tickTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -376,6 +389,14 @@ final class ViewController: UIViewController {
     private func stopRecording(reason: String) {
         analyzer?.stop()
         recorder.stop()
+
+        // 收尾 WAV 文件，回填 header size 字段
+        do {
+            try wavWriter?.finalize()
+        } catch {
+            log("[wav] finalize failed: \(error)")
+        }
+        wavWriter = nil
 
         let finalState = analyzer?.state ?? FgVadState_Idle
         let endReason = analyzer?.endReason ?? FgVadEndReason_None_
@@ -638,6 +659,10 @@ extension ViewController: FGIOSRecorderDelegate {
                   didProduceFrames frames: UnsafePointer<Int16>,
                   count: UInt) {
         guard let analyzer else { return }
+
+        // tee PCM 到 WavWriter（失败不影响 analyze 主流程）
+        try? wavWriter?.append(samples: frames, count: Int(count))
+
         let buffer = UnsafeBufferPointer(start: frames, count: Int(count))
         let results: [FgVadAnalyzer.Result]
         do {
