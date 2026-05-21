@@ -4,3 +4,7 @@
 xcuserdata/
 DerivedData/
 Cargo.lock
+# fgvad-jni build artifacts (独立 crate，target 不在根目录)
+examples/android/fgvad-jni/target/
+# jniLibs 下的 .so 是构建产物，不入库
+examples/android/FgVadDemo/app/src/main/jniLibs/*/*.so

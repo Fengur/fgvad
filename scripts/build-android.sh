@@ -53,7 +53,7 @@ fi
 # 拷 .so 到 demo jniLibs
 DEMO_LIBS="$ROOT/examples/android/FgVadDemo/app/src/main/jniLibs/arm64-v8a"
 mkdir -p "$DEMO_LIBS"
-cp "$ROOT/target/aarch64-linux-android/$PROFILE/libfgvad_android.so" "$DEMO_LIBS/"
+cp "$ROOT/examples/android/fgvad-jni/target/aarch64-linux-android/$PROFILE/libfgvad_android.so" "$DEMO_LIBS/"
 cp "$ROOT/vendor/ten-vad/Android/arm64-v8a/libten_vad.so" "$DEMO_LIBS/"
 
 echo
