@@ -27,6 +27,10 @@ class MainActivity : AppCompatActivity() {
 
     private var vad: FgVad? = null
     private var sentenceCount = 0
+    private var wavWriter: WavWriter? = null
+
+    private fun recordingsDir(): java.io.File =
+        java.io.File(getExternalFilesDir(null), "recordings").also { it.mkdirs() }
 
     // 短时参数
     private val shortHead = NumField("head_silence_timeout", "3000")
@@ -170,6 +174,20 @@ class MainActivity : AppCompatActivity() {
             )
         }
         vad!!.start()
+
+        // tee mic PCM 到 WAV 文件
+        val ts = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", java.util.Locale.US)
+            .format(java.util.Date())
+        val wavFile = java.io.File(recordingsDir(), "recording_$ts.wav")
+        wavWriter = try {
+            WavWriter(wavFile).also {
+                logger.i("wav", "WavWriter opened: ${wavFile.absolutePath}")
+            }
+        } catch (t: Throwable) {
+            logger.w("wav", "WavWriter init failed: ${t.message}")
+            null
+        }
+
         recorder.start()
         recordBtn.text = "停止录音"
         statusLabel.text = "状态：录音中 · 0 句"
@@ -183,6 +201,10 @@ class MainActivity : AppCompatActivity() {
         logger.i("App", "session stop endReason=$end ($reason)")
         vad?.close()
         vad = null
+        try { wavWriter?.finalize() } catch (t: Throwable) {
+            logger.e("wav", "finalize failed: ${t.message}")
+        }
+        wavWriter = null
         recordBtn.text = "开始录音"
         ui.post { statusLabel.text = "状态：${reasonText(end)} · $sentenceCount 句" }
     }
@@ -197,6 +219,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun onPcm(samples: ShortArray, count: Int) {
         val v = vad ?: return
+        try { wavWriter?.append(samples, count) } catch (t: Throwable) {
+            logger.e("wav", "append failed: ${t.message}")
+        }
         val results = v.process(samples, count)
         if (results.isEmpty()) return
         ui.post { handleResults(results) }

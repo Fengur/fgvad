@@ -12,6 +12,7 @@ class AudioPickerAdapter(
     private val onPreviewClicked: (Row.Item) -> Unit,
     private val onAnalyzeClicked: (Row.Item) -> Unit,
     private val onDeleteClicked: ((Row.Item) -> Unit)?,
+    private val onClearClicked: (() -> Unit)? = null,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     sealed class Row {
@@ -53,8 +54,9 @@ class AudioPickerAdapter(
                 val h = holder as HeaderVH
                 h.title.text = r.title
                 h.clearBtn.visibility = if (r.showClear) View.VISIBLE else View.GONE
-                // Android-1 暂不 wire 清空动作（Android-2 处理）
-                h.clearBtn.setOnClickListener(null)
+                h.clearBtn.setOnClickListener {
+                    onClearClicked?.invoke()
+                }
             }
             is Row.Item -> {
                 val h = holder as ItemVH
