@@ -186,6 +186,132 @@ pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeEndReason<'local>(
     })
 }
 
+// ———————— nativeProcess ————————
+
+use jni::objects::{JObject, JShortArray};
+use jni::sys::{jobjectArray, jsize};
+
+/// 入参：handle, samples (jshort[]), count (jint)。
+/// 返回：Object[]，每个元素是 io/fengur/fgvad/Result 实例。NULL 表示失败。
+///
+/// 内存策略：samples 用 get_array_elements 读；audioSamples 仅
+/// SentenceEnded/SentenceForceCut 时分配 Java short[] 拷贝。
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeProcess<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+    samples: JShortArray<'local>,
+    count: jint,
+) -> jobjectArray {
+    let count = count.max(0) as usize;
+
+    // 读取 PCM 样本（借用 env，但在闭包外完成，不引入别名）
+    let pcm: Vec<i16> = if count == 0 {
+        Vec::new()
+    } else {
+        let arr = match unsafe {
+            env.get_array_elements(&samples, jni::objects::ReleaseMode::NoCopyBack)
+        } {
+            Ok(a) => a,
+            Err(_) => return std::ptr::null_mut(),
+        };
+        let len = arr.len().min(count);
+        arr[..len].to_vec()
+    };
+
+    // 在 catch_panic 闭包内运行 fgvad；闭包不碰 env，消除别名
+    let results = catch_panic(&mut env, || -> Vec<fgvad::VadResult> {
+        let Some(vad) = (unsafe { handle_mut(handle) }) else {
+            return Vec::new();
+        };
+        vad.process(&pcm).unwrap_or_default()
+    });
+
+    // 构建 Java Result[]（在闭包外使用 env）
+    let result_class = match env.find_class("io/fengur/fgvad/Result") {
+        Ok(c) => c,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let arr = match env.new_object_array(results.len() as jsize, &result_class, JObject::null()) {
+        Ok(a) => a,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    for (i, r) in results.iter().enumerate() {
+        match build_result_object(&mut env, &result_class, r) {
+            Ok(obj) => {
+                let _ = env.set_object_array_element(&arr, i as jsize, obj);
+            }
+            Err(_) => {
+                // 单条构造失败保留 null 元素，整体仍返回
+            }
+        }
+    }
+
+    arr.into_raw()
+}
+
+fn build_result_object<'local>(
+    env: &mut JNIEnv<'local>,
+    cls: &JClass<'local>,
+    r: &fgvad::VadResult,
+) -> jni::errors::Result<JObject<'local>> {
+    use fgvad::ResultType;
+
+    let result_type: jint = match r.result_type {
+        ResultType::Silence => 0,
+        ResultType::SentenceStart => 1,
+        ResultType::Active => 2,
+        ResultType::SentenceEnd => 3,
+    };
+
+    let event: jint = match r.event {
+        None => 0,
+        Some(fgvad::Event::SentenceStarted) => 1,
+        Some(fgvad::Event::SentenceEnded) => 2,
+        Some(fgvad::Event::SentenceForceCut) => 3,
+        Some(fgvad::Event::HeadSilenceTimeout) => 4,
+        Some(fgvad::Event::MaxDurationReached) => 5,
+    };
+
+    let state_ord = state_ordinal(r.state);
+    let end_reason_ord = end_reason_ordinal(r.state);
+
+    // audio 只在 SentenceEnded / SentenceForceCut 时分配
+    let need_audio = matches!(
+        r.event,
+        Some(fgvad::Event::SentenceEnded) | Some(fgvad::Event::SentenceForceCut)
+    );
+    let audio_obj: JObject = if need_audio && !r.audio.is_empty() {
+        let arr = env.new_short_array(r.audio.len() as jsize)?;
+        env.set_short_array_region(&arr, 0, &r.audio)?;
+        arr.into()
+    } else {
+        JObject::null()
+    };
+
+    // Result(type, event, state, endReason, isSentenceBegin, isSentenceEnd,
+    //        streamOffsetSample, audioSamples)
+    // 签名：(IIIIZZJ[S)V
+    let obj = env.new_object(
+        cls,
+        "(IIIIZZJ[S)V",
+        &[
+            jni::objects::JValue::Int(result_type),
+            jni::objects::JValue::Int(event),
+            jni::objects::JValue::Int(state_ord),
+            jni::objects::JValue::Int(end_reason_ord),
+            jni::objects::JValue::Bool(if r.is_sentence_begin { 1 } else { 0 }),
+            jni::objects::JValue::Bool(if r.is_sentence_end { 1 } else { 0 }),
+            jni::objects::JValue::Long(r.stream_offset_sample as jlong),
+            jni::objects::JValue::Object(&audio_obj),
+        ],
+    )?;
+    Ok(obj)
+}
+
 fn state_ordinal(s: State) -> jint {
     use fgvad::State::*;
     match s {
