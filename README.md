@@ -102,6 +102,19 @@ Demo 提供：短/长模式切换、参数实时调节、流式录音、加载 W
 列表 + 按句试听、调试日志写到 `~/Library/Logs/FgVadDemo/run.log`。详见
 [`examples/macos/README.md`](./examples/macos/README.md)。
 
+### 跑 Android Demo
+
+```bash
+cd examples/android/FgVadDemo
+../../../scripts/build-android.sh           # 编 fgvad-jni 并拷 .so
+adb push ../../../test-data/long/yixi-zhuzhiwei-typography.wav \
+  /sdcard/Android/data/io.fengur.fgvaddemo/files/long/
+./gradlew :app:installDebug
+adb shell am start -n io.fengur.fgvaddemo/.MainActivity
+```
+
+启动后：长时模式 → 加载测试音频 → `[external] long/yixi-...` → 等解析完成。
+
 ### C 接入最小例子
 
 ```c
@@ -191,7 +204,9 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
   两份产物，链接对应平台的 ten_vad.framework。`examples/ios/FgVadDemo/` 是
   最小录音 demo，UIKit + 复用 OC RemoteIO AU 录音器，已验证在 iPhone 17 Pro
   Simulator 跑得起来。**XCFramework 打包脚本待补**
-- **Android**：在路线图
+- **Android（arm64-v8a）**：✅ 已支持。`scripts/build-android.sh` 交叉编译 + JNI bridge，
+  min SDK 26。`examples/android/FgVadDemo/` 功能对齐 iOS Demo（录音、加载 WAV 重跑、
+  按句试听、日志写文件）。详见 [`examples/android/README.md`](./examples/android/README.md)
 - **Linux / Windows / WASM**：暂不计划
 - **输入**：仅 16 kHz / 单声道 / i16 PCM
 - **噪声**：当前对办公室级别（−50 dBFS）背景噪声够用；餐厅/车载/户外场景
@@ -204,7 +219,8 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [x] iOS 库构建支持（device + simulator）
 - [x] iOS Demo（最小录音 + VAD）
 - [ ] iOS XCFramework 打包脚本（用于对外分发）
-- [ ] Android 构建支持（NDK + JNI bridge）
+- [x] Android 构建支持（NDK + JNI bridge）
+- [x] Android Demo（含按句试听 + 测试 WAV 重跑）
 - [ ] CocoaPods / SPM 分发
 
 ## License

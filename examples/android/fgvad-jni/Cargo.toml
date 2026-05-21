@@ -1,0 +1,15 @@
+[package]
+name = "fgvad-jni"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "JNI bridge for fgvad on Android"
+publish = false
+
+[lib]
+name = "fgvad_android"
+crate-type = ["cdylib"]
+
+[dependencies]
+fgvad = { path = "../../.." }
+jni = "0.21"

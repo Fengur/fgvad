@@ -5,10 +5,11 @@ fn main() {
     match target_os.as_str() {
         "macos" => link_macos(),
         "ios" => link_ios(&target),
+        "android" => link_android(),
         _ => {
             println!(
                 "cargo:warning=fgvad 当前平台 {target} 未配置 ten-vad 链接\
-                ，仅支持 macOS / iOS。"
+                ，仅支持 macOS / iOS / Android。"
             );
         }
     }
@@ -81,4 +82,19 @@ fn link_ios(target: &str) {
     println!(
         "cargo:rerun-if-changed=vendor/ten-vad/iOS/{subdir}/ten_vad.framework/ten_vad"
     );
+}
+
+fn link_android() {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR unset");
+    let abi = "arm64-v8a"; // 单 ABI；将来支持 v7a 时这里按 target arch 切换
+    let lib_dir = format!("{manifest_dir}/vendor/ten-vad/Android/{abi}");
+
+    println!("cargo:rustc-link-search=native={lib_dir}");
+    println!("cargo:rustc-link-lib=dylib=ten_vad");
+
+    // .so 链接信息：DT_NEEDED 写 libten_vad.so，运行时由 Android linker 在
+    // jniLibs/<abi>/ 目录下找到（由 APK 解压保证）。不需要 rpath。
+
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=vendor/ten-vad/Android/{abi}/libten_vad.so");
 }

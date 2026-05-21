@@ -1,22 +1,22 @@
 //! fgvad — intelligent VAD library.
 //!
 //! 在 ten-vad 之上叠加状态机和动态端点策略。当前 ten-vad 链接支持
-//! macOS 和 iOS 两个 Apple 平台；其他平台只编出 state machine（无 FFI）。
+//! macOS、iOS 和 Android 三个平台；其他平台只编出 state machine（无 FFI）。
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub(crate) mod sys;
 
 pub mod state_machine;
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 mod vad;
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub mod ffi;
 
 pub use state_machine::{EndReason, Event, LongModeConfig, Mode, ShortModeConfig, State};
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub use vad::{Error, FgVad, FrameDiag, ResultType, VadResult};
 
 pub fn version() -> &'static str {
@@ -24,7 +24,7 @@ pub fn version() -> &'static str {
 }
 
 /// 读取底层 ten-vad 的版本字符串。
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
 pub fn ten_vad_version() -> String {
     use std::ffi::CStr;
     unsafe {
@@ -45,7 +45,7 @@ mod tests {
         assert_eq!(version(), env!("CARGO_PKG_VERSION"));
     }
 
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
+    #[cfg(any(target_os = "macos", target_os = "ios", target_os = "android"))]
     #[test]
     fn ten_vad_is_linked_and_reports_version() {
         let v = ten_vad_version();
