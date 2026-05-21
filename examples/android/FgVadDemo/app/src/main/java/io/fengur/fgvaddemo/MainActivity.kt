@@ -7,7 +7,7 @@ import io.fengur.fgvad.FgVad
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 烟测：FgVad 类初始化触发 System.loadLibrary("fgvad_android")
-        android.util.Log.i("FgVadDemo", "fgvad version=${FgVad.version()}")
+        DemoLogger.init(this)
+        DemoLogger.get().i("App", "fgvad version=${FgVad.version()}")
     }
 }
