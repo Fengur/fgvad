@@ -69,9 +69,8 @@ final class Recorder {
         isRecording = true
     }
 
-    /// 停止录音，保存为 WAV 并返回文件 URL。
-    @discardableResult
-    func stopAndSave() throws -> URL {
+    /// 停止录音引擎，释放资源。不写文件——WavWriter 已在录音过程中实时 tee 写盘。
+    func stop() {
         if let engine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
@@ -81,17 +80,6 @@ final class Recorder {
         converter = nil
         isRecording = false
         lastRecordedSampleCount = buffer.count
-
-        let dir = Recorder.recordingsDirectory()
-        try FileManager.default.createDirectory(
-            at: dir, withIntermediateDirectories: true)
-
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd-HH-mm-ss"
-        let name = "rec-\(df.string(from: Date())).wav"
-        let url = dir.appendingPathComponent(name)
-        try WavIO.writeMonoInt16(buffer, sampleRate: 16_000, to: url)
-        return url
     }
 
     // MARK: - 硬件采样率 -> 16kHz mono int16 转换

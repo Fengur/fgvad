@@ -14,6 +14,8 @@ final class MainWindowController: NSWindowController {
     private var analyzer: FgVadAnalyzer?
     private var mode: Mode = .short
     private var sentenceCount = 0
+    private var wavWriter: WavWriter?
+    private var currentWavURL: URL?
 
     // MARK: - Views
     private let modeSegmented = NSSegmentedControl(
@@ -42,8 +44,12 @@ final class MainWindowController: NSWindowController {
 
     // 操作按钮 & 状态
     private let recordButton = NSButton(title: "开始录音", target: nil, action: nil)
+    private let pickerButton = NSButton(title: "测试音频", target: nil, action: nil)
     private let loadWavButton = NSButton(title: "加载 WAV 重跑", target: nil, action: nil)
     private let openFolderButton = NSButton(title: "录音目录", target: nil, action: nil)
+
+    // MARK: - Audio Picker
+    private var pickerWindowController: AudioPickerWindowController?
     private let statusLabel = NSTextField(labelWithString: "就绪")
     private let liveStateLabel = NSTextField(labelWithString: "")
     private let lastFileLabel = NSTextField(labelWithString: "")
@@ -130,13 +136,16 @@ final class MainWindowController: NSWindowController {
         recordButton.action = #selector(toggleRecording(_:))
         recordButton.keyEquivalent = " "
         recordButton.controlSize = .large
+        pickerButton.bezelStyle = .rounded
+        pickerButton.target = self
+        pickerButton.action = #selector(showAudioPicker(_:))
         loadWavButton.bezelStyle = .rounded
         loadWavButton.target = self
         loadWavButton.action = #selector(loadWavAndRerun(_:))
         openFolderButton.bezelStyle = .rounded
         openFolderButton.target = self
         openFolderButton.action = #selector(openRecordingsFolder)
-        let buttonsRow = NSStackView(views: [recordButton, loadWavButton, openFolderButton])
+        let buttonsRow = NSStackView(views: [recordButton, pickerButton, loadWavButton, openFolderButton])
         buttonsRow.orientation = .horizontal
         buttonsRow.spacing = 12
         content.addSubview(buttonsRow)
@@ -399,6 +408,7 @@ final class MainWindowController: NSWindowController {
         sentenceRecords = []
         currentSentenceStartSample = nil
         lastWavURL = nil
+        currentWavURL = nil
         clearSentenceList()
 
         recorder.onChunk = { [weak self] chunk in
@@ -417,7 +427,23 @@ final class MainWindowController: NSWindowController {
             return
         }
 
+        // 创建 WavWriter，tee mic PCM 到 recordings/
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        let filename = "recording_\(formatter.string(from: Date())).wav"
+        let wavURL = Recorder.recordingsDirectory()
+            .appendingPathComponent("recordings", isDirectory: true)
+            .appendingPathComponent(filename)
+        do {
+            wavWriter = try WavWriter(url: wavURL)
+            currentWavURL = wavURL
+            DemoLog.log("WavWriter opened: \(wavURL.lastPathComponent)")
+        } catch {
+            DemoLog.log("WavWriter init failed: \(error) — recording continues without file save")
+        }
+
         recordButton.title = "停止录音"
+        pickerButton.isEnabled = false
         modeSegmented.isEnabled = false
         shortConfigBox.isHidden = true  // 录音中隐藏 config 防止误改
         longConfigBox.isHidden = true
@@ -442,6 +468,16 @@ final class MainWindowController: NSWindowController {
 
     private func handleChunk(_ chunk: UnsafeBufferPointer<Int16>) {
         guard let analyzer else { return }
+
+        // tee PCM 到 WavWriter（失败不影响 analyze 主流程）
+        if let writer = wavWriter, let base = chunk.baseAddress {
+            do {
+                try writer.append(samples: base, count: chunk.count)
+            } catch {
+                DemoLog.log("WavWriter append failed: \(error)")
+            }
+        }
+
         let results: [FgVadAnalyzer.Result]
         do {
             results = try analyzer.feed(chunk)
@@ -503,16 +539,23 @@ final class MainWindowController: NSWindowController {
         tickTimer?.invalidate()
         tickTimer = nil
         recordingStartDate = nil
-        let duration: Double
+
+        // 收尾 WavWriter（回填 RIFF/data chunk size）
         do {
-            let url = try recorder.stopAndSave()
-            lastWavURL = url
-            duration = Double(recorder.lastRecordedSampleCount) / 16000.0
+            try wavWriter?.finalize()
+        } catch {
+            DemoLog.log("WavWriter finalize failed: \(error)")
+        }
+        wavWriter = nil
+
+        recorder.stop()
+        lastWavURL = currentWavURL
+        let duration = Double(recorder.lastRecordedSampleCount) / 16000.0
+        if let url = currentWavURL {
             lastFileLabel.stringValue = String(
                 format: "%.2fs · %@", duration, url.lastPathComponent)
-        } catch {
-            duration = 0
-            lastFileLabel.stringValue = "保存失败：\(error)"
+        } else {
+            lastFileLabel.stringValue = String(format: "%.2fs", duration)
         }
 
         let finalState = analyzer?.state ?? FgVadState_Idle
@@ -520,6 +563,7 @@ final class MainWindowController: NSWindowController {
         analyzer = nil
 
         recordButton.title = "开始录音"
+        pickerButton.isEnabled = true
         modeSegmented.isEnabled = true
         applyMode(mode)  // 恢复 config 可见性
         statusLabel.stringValue = Self.summaryText(
@@ -640,9 +684,43 @@ final class MainWindowController: NSWindowController {
             progressSpinner.stopAnimation(nil)
         }
         recordButton.isEnabled = !processing
+        pickerButton.isEnabled = !processing
         loadWavButton.isEnabled = !processing
         openFolderButton.isEnabled = !processing
         modeSegmented.isEnabled = !processing
+    }
+
+    // MARK: - Audio Picker
+
+    @objc private func showAudioPicker(_ sender: Any?) {
+        guard !recorder.isRecording else { return }
+        let picker = AudioPickerWindowController()
+        picker.onPreview = { [weak self] url in
+            self?.playWAV(url)
+        }
+        picker.onAnalyze = { [weak self] url in
+            self?.rerunOnFile(url)
+        }
+        pickerWindowController = picker
+        guard let pickerWindow = picker.window, let mainWindow = window else { return }
+        mainWindow.beginSheet(pickerWindow) { [weak self] _ in
+            self?.pickerWindowController = nil
+        }
+    }
+
+    private func playWAV(_ url: URL) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            do {
+                self?.audioPlayer?.stop()
+                let player = try AVAudioPlayer(contentsOf: url)
+                DispatchQueue.main.async {
+                    self?.audioPlayer = player
+                    player.play()
+                }
+            } catch {
+                DemoLog.log("playWAV failed: \(error)")
+            }
+        }
     }
 
     private func currentAnalyzerMode() -> FgVadAnalyzer.Mode {
