@@ -11,7 +11,7 @@ use jni::JNIEnv;
 use jni::objects::JClass;
 use jni::sys::{jboolean, jint, jlong, jstring};
 
-use fgvad::{FgVad, LongModeConfig, ShortModeConfig};
+use fgvad::{FgVad, LongModeConfig, ShortModeConfig, State};
 
 /// 把 Rust panic 转成 Java IllegalStateException。所有 native 函数包一层。
 fn catch_panic<F: FnOnce() -> R, R: Default>(env: &mut JNIEnv, body: F) -> R {
@@ -27,11 +27,14 @@ fn catch_panic<F: FnOnce() -> R, R: Default>(env: &mut JNIEnv, body: F) -> R {
 /// 烟测函数：返回 fgvad 库版本字符串。Kotlin 测试用。
 #[no_mangle]
 pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeVersion<'local>(
-    env: JNIEnv<'local>,
+    mut env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jstring {
-    let v = fgvad::version();
-    env.new_string(v).expect("new_string").into_raw()
+    let version_str: String = catch_panic(&mut env, || fgvad::version().to_string());
+    match env.new_string(version_str) {
+        Ok(s) => s.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
 }
 
 #[no_mangle]
@@ -96,7 +99,6 @@ pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeFree<'local>(
 }
 
 /// 拿 handle 解引用为 &mut FgVad。NULL handle 返回 None。
-#[allow(dead_code)]
 unsafe fn handle_mut<'a>(handle: jlong) -> Option<&'a mut FgVad> {
     if handle == 0 {
         None
@@ -105,11 +107,105 @@ unsafe fn handle_mut<'a>(handle: jlong) -> Option<&'a mut FgVad> {
     }
 }
 
-#[allow(dead_code)]
 unsafe fn handle_ref<'a>(handle: jlong) -> Option<&'a FgVad> {
     if handle == 0 {
         None
     } else {
         Some(&*(handle as *const FgVad))
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeStart<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) {
+    catch_panic(&mut env, || {
+        if let Some(v) = unsafe { handle_mut(handle) } {
+            v.start();
+        }
+    });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeStop<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) {
+    catch_panic(&mut env, || {
+        if let Some(v) = unsafe { handle_mut(handle) } {
+            v.stop();
+        }
+    });
+}
+
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeReset<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) {
+    catch_panic(&mut env, || {
+        if let Some(v) = unsafe { handle_mut(handle) } {
+            v.reset();
+        }
+    });
+}
+
+/// 返回 State 的 ordinal（与 Kotlin enum State 顺序匹配：
+/// Idle=0, Detecting=1, Started=2, Voiced=3, Trailing=4, End=5）。
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeState<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> jint {
+    catch_panic(&mut env, || {
+        let Some(v) = (unsafe { handle_ref(handle) }) else {
+            return 0;
+        };
+        state_ordinal(v.state())
+    })
+}
+
+/// 返回 EndReason 的 ordinal（None=0, SpeechCompleted=1, HeadSilenceTimeout=2,
+/// MaxDurationReached=3, ExternalStop=4）。仅 state==End 时有意义。
+#[no_mangle]
+pub extern "system" fn Java_io_fengur_fgvad_FgVad_nativeEndReason<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    handle: jlong,
+) -> jint {
+    catch_panic(&mut env, || {
+        let Some(v) = (unsafe { handle_ref(handle) }) else {
+            return 0;
+        };
+        end_reason_ordinal(v.state())
+    })
+}
+
+fn state_ordinal(s: State) -> jint {
+    use fgvad::State::*;
+    match s {
+        Idle => 0,
+        Detecting => 1,
+        Started => 2,
+        Voiced => 3,
+        Trailing => 4,
+        End(_) => 5,
+    }
+}
+
+fn end_reason_ordinal(s: State) -> jint {
+    use fgvad::EndReason::*;
+    use fgvad::State::*;
+    match s {
+        End(SpeechCompleted) => 1,
+        End(HeadSilenceTimeout) => 2,
+        End(MaxDurationReached) => 3,
+        End(ExternalStop) => 4,
+        _ => 0,
     }
 }
