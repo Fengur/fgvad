@@ -442,25 +442,6 @@ final class ViewController: UIViewController {
         UInt32(field.text ?? "") ?? fallback
     }
 
-    // MARK: - Test audio picker (batch analyze on bundled WAVs)
-
-    private func bundledTestAudioURLs() -> [URL] {
-        // project.yml 把 test-data/short/ 和 test-data/long/ 当 folder
-        // reference 打成 .app/short/ 和 .app/long/（folder reference 保留
-        // 源目录名）。
-        var urls: [URL] = []
-        for sub in ["short", "long"] {
-            guard let dir = Bundle.main.url(forResource: sub, withExtension: nil) else { continue }
-            let files = (try? FileManager.default.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: nil)) ?? []
-            urls.append(contentsOf:
-                files.filter { $0.pathExtension.lowercased() == "wav" }
-                     .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            )
-        }
-        return urls
-    }
-
     /// 处理中遮罩开关——同时禁用关键交互入口。
     private func setProcessing(_ on: Bool, hint: String = "处理中…") {
         if on {
@@ -517,51 +498,15 @@ final class ViewController: UIViewController {
 
     @objc private func showTestAudioPicker() {
         guard !recorder.isRecording else { return }
-        let urls = bundledTestAudioURLs()
-        guard !urls.isEmpty else {
-            statusLabel.text = "未找到 bundled 测试音频"
-            return
-        }
-
-        let sheet = UIAlertController(
-            title: "选一个测试音频",
-            message: nil,
-            preferredStyle: .actionSheet)
-
-        for url in urls {
-            sheet.addAction(UIAlertAction(title: url.lastPathComponent, style: .default) { [weak self] _ in
-                self?.showFileActionSheet(for: url)
-            })
-        }
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = loadTestAudioButton
-            pop.sourceRect = loadTestAudioButton.bounds
-        }
-        present(sheet, animated: true)
-    }
-
-    /// 第二步：选完文件后问"试听 / analyze"。
-    private func showFileActionSheet(for url: URL) {
-        let sheet = UIAlertController(
-            title: url.lastPathComponent,
-            message: "选择动作",
-            preferredStyle: .actionSheet)
-
-        sheet.addAction(UIAlertAction(title: "🔊 试听原音频", style: .default) { [weak self] _ in
+        let picker = AudioPickerViewController()
+        picker.onPreview = { [weak self] url in
             self?.playOriginal(url: url)
-        })
-        sheet.addAction(UIAlertAction(title: "⚡️ 跑 VAD analyze（用当前模式 + 参数）", style: .default) { [weak self] _ in
-            self?.runAnalyze(on: url)
-        })
-        sheet.addAction(UIAlertAction(title: "取消", style: .cancel))
-
-        if let pop = sheet.popoverPresentationController {
-            pop.sourceView = loadTestAudioButton
-            pop.sourceRect = loadTestAudioButton.bounds
         }
-        present(sheet, animated: true)
+        picker.onAnalyze = { [weak self] url in
+            self?.runAnalyze(on: url)
+        }
+        let nav = UINavigationController(rootViewController: picker)
+        present(nav, animated: true)
     }
 
     /// 直接播放原 WAV（无 analyze）。

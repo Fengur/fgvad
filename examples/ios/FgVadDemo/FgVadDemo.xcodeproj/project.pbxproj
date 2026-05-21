@@ -10,6 +10,7 @@
 		32F6DEEBA64F231D66B1EC7B /* short in Resources */ = {isa = PBXBuildFile; fileRef = D08ABA89F3AD5765E4AB3D60 /* short */; };
 		3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */; };
 		583B9A9B8070A2F00430A55A /* long in Resources */ = {isa = PBXBuildFile; fileRef = 48D43C157DA25CA47E792E87 /* long */; };
+		5B8FAAAE549AFBD2186E1498 /* AudioPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 015B7E3E247F67CCA13326D7 /* AudioPickerViewController.swift */; };
 		8359FE2B44A370431EC9C78A /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D8BB17FD23369CD081B25F /* ViewController.swift */; };
 		A18655AB0F16BFFAAADAC9A8 /* FGAudioController.m in Sources */ = {isa = PBXBuildFile; fileRef = 11EAF785075DABA8753AC025 /* FGAudioController.m */; };
 		A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */; };
@@ -18,6 +19,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		015B7E3E247F67CCA13326D7 /* AudioPickerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPickerViewController.swift; sourceTree = "<group>"; };
 		11EAF785075DABA8753AC025 /* FGAudioController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FGAudioController.m; sourceTree = "<group>"; };
 		3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		3CFFF22DF8EF77B47C8C1E01 /* FgVadDemo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "FgVadDemo-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -64,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */,
+				015B7E3E247F67CCA13326D7 /* AudioPickerViewController.swift */,
 				D99A9EB8309363FFB31A5457 /* FGAudioController.h */,
 				11EAF785075DABA8753AC025 /* FGAudioController.m */,
 				EFA3FCBDD4F51994EAD771D6 /* FGIOSRecorder.h */,
@@ -189,6 +192,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */,
+				5B8FAAAE549AFBD2186E1498 /* AudioPickerViewController.swift in Sources */,
 				A18655AB0F16BFFAAADAC9A8 /* FGAudioController.m in Sources */,
 				F8DEC8F5AA1FAA8F524AE4B8 /* FGIOSRecorder.m in Sources */,
 				A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */,
