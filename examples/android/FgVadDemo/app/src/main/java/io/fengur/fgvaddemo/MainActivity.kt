@@ -227,43 +227,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoadAudioDialog() {
-        val items = mutableListOf<Pair<String, () -> java.io.InputStream>>()
-
-        // 1) bundled assets
-        val list = assets.list("short") ?: emptyArray()
-        for (name in list.sorted()) {
-            items.add("[assets] short/$name" to { assets.open("short/$name") })
+        val sheet = AudioPickerSheet()
+        sheet.onPreview = { label, samples ->
+            logger.i("Picker", "preview $label (${samples.size} samples)")
+            SentencePlayer.play(samples)
         }
-
-        // 2) external long
-        val longDir = java.io.File(getExternalFilesDir(null), "long")
-        if (longDir.exists()) {
-            for (f in longDir.listFiles { _, n -> n.endsWith(".wav") } ?: emptyArray()) {
-                items.add("[external] long/${f.name}" to { f.inputStream() })
-            }
+        sheet.onAnalyze = { label, samples ->
+            runAnalyze(label, samples)
         }
-
-        if (items.isEmpty()) {
-            Toast.makeText(this, "无测试音频。先 adb push 到 long/，或确认 assets/short/ 有 WAV。", Toast.LENGTH_LONG).show()
-            return
-        }
-
-        val labels = items.map { it.first }.toTypedArray()
-        android.app.AlertDialog.Builder(this)
-            .setTitle("选择测试音频")
-            .setItems(labels) { _, idx ->
-                val (label, opener) = items[idx]
-                Thread {
-                    try {
-                        val pcm = opener().use { WavReader.read(it) }
-                        ui.post { runAnalyze(label, pcm) }
-                    } catch (e: Throwable) {
-                        logger.e("App", "wav read failed: ${e.message}")
-                        ui.post { Toast.makeText(this, "读 WAV 失败: ${e.message}", Toast.LENGTH_LONG).show() }
-                    }
-                }.start()
-            }
-            .show()
+        sheet.show(supportFragmentManager, "AudioPickerSheet")
     }
 
     private fun runAnalyze(label: String, pcm: ShortArray) {
