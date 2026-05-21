@@ -227,8 +227,98 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showLoadAudioDialog() {
-        // Task 18 实现
-        Toast.makeText(this, "TODO: load audio dialog (Task 18)", Toast.LENGTH_SHORT).show()
+        val items = mutableListOf<Pair<String, () -> java.io.InputStream>>()
+
+        // 1) bundled assets
+        val list = assets.list("short") ?: emptyArray()
+        for (name in list.sorted()) {
+            items.add("[assets] short/$name" to { assets.open("short/$name") })
+        }
+
+        // 2) external long
+        val longDir = java.io.File(getExternalFilesDir(null), "long")
+        if (longDir.exists()) {
+            for (f in longDir.listFiles { _, n -> n.endsWith(".wav") } ?: emptyArray()) {
+                items.add("[external] long/${f.name}" to { f.inputStream() })
+            }
+        }
+
+        if (items.isEmpty()) {
+            Toast.makeText(this, "无测试音频。先 adb push 到 long/，或确认 assets/short/ 有 WAV。", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val labels = items.map { it.first }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("选择测试音频")
+            .setItems(labels) { _, idx ->
+                val (label, opener) = items[idx]
+                Thread {
+                    try {
+                        val pcm = opener().use { WavReader.read(it) }
+                        ui.post { runAnalyze(label, pcm) }
+                    } catch (e: Throwable) {
+                        logger.e("App", "wav read failed: ${e.message}")
+                        ui.post { Toast.makeText(this, "读 WAV 失败: ${e.message}", Toast.LENGTH_LONG).show() }
+                    }
+                }.start()
+            }
+            .show()
+    }
+
+    private fun runAnalyze(label: String, pcm: ShortArray) {
+        if (vad != null) {
+            Toast.makeText(this, "请先停止录音", Toast.LENGTH_SHORT).show()
+            return
+        }
+        sentenceCount = 0
+        sentenceAdapter.clear()
+        statusLabel.text = "状态：解析中… ($label)"
+        logger.i("App", "runAnalyze start: $label, ${pcm.size} samples")
+
+        val v = when (currentMode) {
+            Mode.SHORT -> FgVad.newShort(
+                shortHead.intValue(3000), shortTail.intValue(2000), shortMax.intValue(30_000),
+            )
+            Mode.LONG -> FgVad.newLong(
+                longHead.intValue(3000), longMaxSent.intValue(30_000), 0,
+                longTailInit.intValue(2000), longTailMin.intValue(600), longDynamic,
+            )
+        }
+        v.start()
+        Thread {
+            val chunkSize = 1024
+            var offset = 0
+            var collected = 0
+            while (offset < pcm.size) {
+                val n = minOf(chunkSize, pcm.size - offset)
+                val chunk = if (offset == 0 && n == pcm.size) pcm else pcm.copyOfRange(offset, offset + n)
+                val results = v.process(chunk, n)
+                for (r in results) {
+                    if (r.event != Event.None) {
+                        logger.i("VAD", "event=${r.event} startMs=${r.startMs.toInt()}")
+                    }
+                    if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
+                        collected += 1
+                        val captured = collected
+                        val rr = r
+                        ui.post {
+                            sentenceCount = captured
+                            sentenceAdapter.add(
+                                Sentence(captured, rr.startMs, rr.endMs, rr.event, rr.audioSamples)
+                            )
+                            statusLabel.text = "状态：解析中… · $sentenceCount 句"
+                        }
+                    }
+                }
+                offset += n
+            }
+            v.stop()
+            val end = v.endReason()
+            v.close()
+            logger.i("App", "runAnalyze done: $label, $collected sentences, endReason=$end")
+            ui.post { statusLabel.text = "状态：重跑完成 · $collected 句 · $end" }
+        }.start()
     }
 
     override fun onDestroy() {
