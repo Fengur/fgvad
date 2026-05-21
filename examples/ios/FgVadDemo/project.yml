@@ -15,6 +15,8 @@ targets:
         CFBundleName: FgVadDemo
         CFBundleShortVersionString: "0.1.0"
         NSMicrophoneUsageDescription: "FgVadDemo 需要麦克风权限来录音并对 VAD 进行测试。"
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UILaunchScreen:
           UIColorName: ""
         UIApplicationSceneManifest:

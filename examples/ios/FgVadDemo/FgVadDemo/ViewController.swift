@@ -369,8 +369,9 @@ final class ViewController: UIViewController {
         let wavURL = docs.appendingPathComponent("recordings/\(filename)")
         do {
             wavWriter = try WavWriter(url: wavURL)
+            DemoLogger.shared.i("wav", "WavWriter opened: \(wavURL.lastPathComponent)")
         } catch {
-            log("[wav] WavWriter init failed: \(error) — recording continues without file save")
+            DemoLogger.shared.w("wav", "WavWriter init failed: \(error) — recording continues without file save")
         }
 
         startDate = Date()
@@ -394,7 +395,7 @@ final class ViewController: UIViewController {
         do {
             try wavWriter?.finalize()
         } catch {
-            log("[wav] finalize failed: \(error)")
+            DemoLogger.shared.e("wav", "finalize failed: \(error)")
         }
         wavWriter = nil
 
@@ -424,9 +425,9 @@ final class ViewController: UIViewController {
         )
     }
 
-    /// 控制台日志（Xcode debug console / Console.app 可见），不再占用 UI 空间。
+    /// 控制台日志：同时写 Documents/run.log 和 Xcode console。
     private func log(_ msg: String) {
-        NSLog("[FgVadDemo] %@", msg)
+        DemoLogger.shared.i("VC", msg)
     }
 
     /// 更新 sentenceRecords + 同步 table view + empty state 显示。
@@ -661,7 +662,11 @@ extension ViewController: FGIOSRecorderDelegate {
         guard let analyzer else { return }
 
         // tee PCM 到 WavWriter（失败不影响 analyze 主流程）
-        try? wavWriter?.append(samples: frames, count: Int(count))
+        do {
+            try wavWriter?.append(samples: frames, count: Int(count))
+        } catch {
+            DemoLogger.shared.e("wav", "append failed: \(error)")
+        }
 
         let buffer = UnsafeBufferPointer(start: frames, count: Int(count))
         let results: [FgVadAnalyzer.Result]

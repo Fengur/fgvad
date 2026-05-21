@@ -204,6 +204,12 @@ final class AudioPickerViewController: UITableViewController {
         tableView.separatorInset = UIEdgeInsets(top: 0, left: 16, bottom: 0, right: 0)
         tableView.tableHeaderView = nil
 
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "导出日志",
+            style: .plain,
+            target: self,
+            action: #selector(exportLog))
+
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .close,
             target: self,
@@ -375,6 +381,15 @@ final class AudioPickerViewController: UITableViewController {
     }
 
     // MARK: - Actions
+
+    @objc private func exportLog() {
+        let url = DemoLogger.shared.logFileURL
+        let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        if let pop = activity.popoverPresentationController {
+            pop.barButtonItem = navigationItem.leftBarButtonItem
+        }
+        present(activity, animated: true)
+    }
 
     @objc private func didTapClose() {
         dismiss(animated: true)
