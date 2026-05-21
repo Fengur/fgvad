@@ -18,6 +18,9 @@ vendor/ten-vad/
 │   │   └── ten_vad.framework arm64，iOS device，上游原版
 │   └── simulator/
 │       └── ten_vad.framework arm64，iOS Simulator——见下方注解
+├── Android/
+│   └── arm64-v8a/
+│       └── libten_vad.so      arm64-v8a，上游原版（无 simulator 概念）
 ├── LICENSE
 └── NOTICES
 ```
@@ -66,6 +69,11 @@ cp -a vendor/ten-vad/iOS/device/ten_vad.framework vendor/ten-vad/iOS/simulator/
 vtool -arch arm64 -set-build-version 7 14.0 17.2 -replace \
   -output vendor/ten-vad/iOS/simulator/ten_vad.framework/ten_vad \
   vendor/ten-vad/iOS/device/ten_vad.framework/ten_vad
+
+# Android arm64-v8a
+rm -rf vendor/ten-vad/Android/arm64-v8a
+mkdir -p vendor/ten-vad/Android/arm64-v8a
+cp /tmp/ten-vad/lib/Android/arm64-v8a/libten_vad.so vendor/ten-vad/Android/arm64-v8a/
 
 # 通用资源
 cp /tmp/ten-vad/include/ten_vad.h vendor/ten-vad/include/
