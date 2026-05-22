@@ -522,9 +522,6 @@ final class ViewController: UIViewController {
     @objc private func showTestAudioPicker() {
         guard !recorder.isRecording else { return }
         let picker = AudioPickerViewController()
-        picker.onPreview = { [weak self] url in
-            self?.playOriginal(url: url)
-        }
         picker.onAnalyze = { [weak self] url in
             self?.runAnalyze(on: url)
         }

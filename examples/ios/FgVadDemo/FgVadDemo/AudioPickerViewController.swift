@@ -1,4 +1,5 @@
 import UIKit
+import AVFoundation
 
 // MARK: - AudioPickerCell
 
@@ -14,7 +15,14 @@ final class AudioPickerCell: UITableViewCell {
     let analyzeButton        = UIButton(type: .system)
     private let deleteButton = UIButton(type: .system)
 
-    /// ViewController 传入的回调，cell 内部 action 调用。
+    /// 播放中状态——picker 设置，cell 据此切换按钮文字。
+    var isPlaying: Bool = false {
+        didSet {
+            previewButton.setTitle(isPlaying ? "⏸ 停" : "▶ 预", for: .normal)
+        }
+    }
+
+    /// picker 传入的回调，cell 内部 action 调用。
     var onPreview: (() -> Void)?
     var onAnalyze: (() -> Void)?
     /// 非 nil 时显示删除按钮；bundled 行不传，置 nil。
@@ -94,6 +102,7 @@ final class AudioPickerCell: UITableViewCell {
     /// 复用前重置状态，避免旧闭包残留。
     override func prepareForReuse() {
         super.prepareForReuse()
+        isPlaying = false
         onPreview = nil
         onAnalyze = nil
         onDelete  = nil
@@ -169,11 +178,13 @@ final class AudioPickerViewController: UITableViewController {
 
     // MARK: - 回调
 
-    /// 外部（ViewController）传入：点击"▶预"时调用，传入对应 URL。
-    var onPreview: ((URL) -> Void)?
-
     /// 外部传入：点击"▶析"时先 dismiss picker，再调用，传入对应 URL。
     var onAnalyze: ((URL) -> Void)?
+
+    // MARK: - 试听播放器（picker 内部持有，与宿主解耦）
+
+    private var previewPlayer: AVAudioPlayer?
+    private var playingURL: URL?
 
     // MARK: - 数据
 
@@ -275,9 +286,10 @@ final class AudioPickerViewController: UITableViewController {
         case .bundled:
             let item = bundledItems[indexPath.row]
             cell.configure(name: item.displayName)
+            cell.isPlaying = (item.url == playingURL)
             cell.onDelete = nil
             cell.onPreview = { [weak self] in
-                self?.onPreview?(item.url)
+                self?.togglePreview(url: item.url)
             }
             cell.onAnalyze = { [weak self] in
                 guard let self else { return }
@@ -287,8 +299,9 @@ final class AudioPickerViewController: UITableViewController {
         case .recordings:
             let item = recordingItems[indexPath.row]
             cell.configure(name: item.displayName)
+            cell.isPlaying = (item.url == playingURL)
             cell.onPreview = { [weak self] in
-                self?.onPreview?(item.url)
+                self?.togglePreview(url: item.url)
             }
             cell.onAnalyze = { [weak self] in
                 guard let self else { return }
@@ -372,6 +385,51 @@ final class AudioPickerViewController: UITableViewController {
         }
     }
 
+    // MARK: - 试听播放
+
+    private func togglePreview(url: URL) {
+        if playingURL == url {
+            stopPreview()
+            return
+        }
+        stopPreview()
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            try AVAudioSession.sharedInstance().setActive(true)
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.prepareToPlay()
+            player.play()
+            previewPlayer = player
+            playingURL = url
+            DemoLogger.shared.i("Picker", "preview start: \(url.lastPathComponent)")
+        } catch {
+            DemoLogger.shared.e("Picker", "preview failed: \(error)")
+            return
+        }
+        tableView.reloadData()
+    }
+
+    private func stopPreview() {
+        previewPlayer?.stop()
+        previewPlayer = nil
+        if playingURL != nil {
+            playingURL = nil
+            tableView.reloadData()
+        }
+    }
+
+    // MARK: - 生命周期（试听兜底）
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopPreview()
+    }
+
+    deinit {
+        previewPlayer?.stop()
+    }
+
     // MARK: - Helpers
 
     private func showAlert(title: String, message: String) {
@@ -393,5 +451,15 @@ final class AudioPickerViewController: UITableViewController {
 
     @objc private func didTapClose() {
         dismiss(animated: true)
+    }
+}
+
+// MARK: - AVAudioPlayerDelegate
+
+extension AudioPickerViewController: AVAudioPlayerDelegate {
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.stopPreview()
+        }
     }
 }
