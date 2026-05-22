@@ -369,7 +369,16 @@ extension AudioPickerWindowController {
 
         // ▶ 析 按钮（最右）
         let analyzeBtn = ActionButton(title: "▶ 析") { [weak self] in
-            self?.onAnalyze?(item.url)
+            guard let self else { return }
+            let url = item.url
+            // 先关 sheet，再触发 analyze（与 iOS 端时序对齐）
+            self.stopPreview()
+            if let parent = self.window?.sheetParent {
+                parent.endSheet(self.window!)
+            } else {
+                self.window?.close()
+            }
+            self.onAnalyze?(url)
         }
         styleActionButton(analyzeBtn)
         container.addSubview(analyzeBtn)

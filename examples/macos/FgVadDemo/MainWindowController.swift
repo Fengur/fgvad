@@ -601,6 +601,18 @@ final class MainWindowController: NSWindowController {
             why, sentenceCount, durationSec)
     }
 
+    /// 将 FgVadEndReason 映射为中文短语（与 iOS 端 reasonText 对齐）。
+    private static func reasonText(_ reason: FgVadEndReason) -> String {
+        switch reason {
+        case FgVadEndReason_None_:               return "已停止"
+        case FgVadEndReason_SpeechCompleted:     return "完成"
+        case FgVadEndReason_HeadSilenceTimeout:  return "头部超时"
+        case FgVadEndReason_MaxDurationReached:  return "时长上限"
+        case FgVadEndReason_ExternalStop:        return "用户停止"
+        default:                                 return reason.label
+        }
+    }
+
     // MARK: - Rerun on file
 
     @objc private func loadWavAndRerun(_ sender: Any?) {
@@ -749,7 +761,7 @@ final class MainWindowController: NSWindowController {
                 self.isAnalyzing = false
                 self.loadWavButton.isEnabled = true
                 self.progressSpinner.stopAnimation(nil)
-                self.statusLabel.stringValue = "重跑完成 · \(sentenceCount) 句 · \(finalEndReason.label)"
+                self.statusLabel.stringValue = "状态：重跑完成 · \(sentenceCount) 句 · \(Self.reasonText(finalEndReason))"
             }
         }
     }
