@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
+        android:icon="@mipmap/ic_launcher"
         android:label="FgVad Demo"
         android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
         <activity

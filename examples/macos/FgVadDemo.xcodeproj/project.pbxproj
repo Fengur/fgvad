@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		23B6C0ACE92A65A2E2CB8AD6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6919528C5915CD513C79D27B /* Assets.xcassets */; };
 		32F6DEEBA64F231D66B1EC7B /* short in Resources */ = {isa = PBXBuildFile; fileRef = D08ABA89F3AD5765E4AB3D60 /* short */; };
 		3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */; };
 		456FC03E85ADCD34DE7047EC /* ten_vad.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = A9ACAEB7C7530B4DF776490A /* ten_vad.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -40,6 +41,7 @@
 /* Begin PBXFileReference section */
 		3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		48D43C157DA25CA47E792E87 /* long */ = {isa = PBXFileReference; lastKnownFileType = folder; name = long; path = "../../test-data/long"; sourceTree = SOURCE_ROOT; };
+		6919528C5915CD513C79D27B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		751612500CE3B7E7829245D0 /* WavWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavWriter.swift; sourceTree = "<group>"; };
 		7C627B9D2A123A64C391AD37 /* FgVadDemo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FgVadDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8660703F0AB737C89F158ED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */,
+				6919528C5915CD513C79D27B /* Assets.xcassets */,
 				C648E58C05442CBE6C1C2D69 /* AudioPickerWindowController.swift */,
 				9CF9EE8D2937A1E646CDC1A5 /* DemoLog.swift */,
 				B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */,
@@ -183,6 +186,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				23B6C0ACE92A65A2E2CB8AD6 /* Assets.xcassets in Resources */,
 				583B9A9B8070A2F00430A55A /* long in Resources */,
 				32F6DEEBA64F231D66B1EC7B /* short in Resources */,
 			);
