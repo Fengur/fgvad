@@ -759,9 +759,6 @@ final class MainWindowController: NSWindowController {
     @objc private func showAudioPicker(_ sender: Any?) {
         guard !recorder.isRecording else { return }
         let picker = AudioPickerWindowController()
-        picker.onPreview = { [weak self] url in
-            self?.playWAV(url)
-        }
         picker.onAnalyze = { [weak self] url in
             self?.rerunOnFile(url)
         }

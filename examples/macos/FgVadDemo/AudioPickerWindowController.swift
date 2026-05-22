@@ -17,11 +17,13 @@ final class AudioPickerWindowController: NSWindowController {
 
     // MARK: - 回调
 
-    /// 外部传入：点击 ▶ 预 时调用，传入对应 URL。
-    var onPreview: ((URL) -> Void)?
-
     /// 外部传入：点击 ▶ 析 时调用，传入对应 URL（picker 不关闭，macOS 习惯）。
     var onAnalyze: ((URL) -> Void)?
+
+    // MARK: - 试听播放器（picker 自持）
+
+    private var previewPlayer: AVAudioPlayer?
+    private var playingURL: URL?
 
     // MARK: - 数据
 
@@ -200,14 +202,56 @@ final class AudioPickerWindowController: NSWindowController {
         if let w = window { alert.beginSheetModal(for: w) }
     }
 
+    // MARK: - 试听控制
+
+    private func togglePreview(url: URL) {
+        if playingURL == url {
+            stopPreview()
+            return
+        }
+        stopPreview()
+        do {
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.prepareToPlay()
+            player.play()
+            previewPlayer = player
+            playingURL = url
+            DemoLog.log("[Picker] preview start: \(url.lastPathComponent)")
+        } catch {
+            DemoLog.log("[Picker] preview failed: \(error)")
+            return
+        }
+        tableView.reloadData()
+    }
+
+    private func stopPreview() {
+        previewPlayer?.stop()
+        previewPlayer = nil
+        if playingURL != nil {
+            playingURL = nil
+            tableView.reloadData()
+        }
+    }
+
     // MARK: - Actions
 
     @objc private func didClickClose() {
+        stopPreview()
         if let parent = window?.sheetParent {
             parent.endSheet(window!)
         } else {
             window?.close()
         }
+    }
+
+    override func close() {
+        stopPreview()
+        super.close()
+    }
+
+    deinit {
+        previewPlayer?.stop()
     }
 }
 
@@ -336,9 +380,10 @@ extension AudioPickerWindowController {
             make.height.equalTo(26)
         }
 
-        // ▶ 预 按钮（析的左侧）
-        let previewBtn = ActionButton(title: "▶ 预") { [weak self] in
-            self?.onPreview?(item.url)
+        // ▶ 预 按钮（析的左侧）；播放中显示 ⏸ 停
+        let previewTitle = (playingURL == item.url) ? "⏸ 停" : "▶ 预"
+        let previewBtn = ActionButton(title: previewTitle) { [weak self] in
+            self?.togglePreview(url: item.url)
         }
         styleActionButton(previewBtn)
         container.addSubview(previewBtn)
@@ -390,6 +435,16 @@ extension AudioPickerWindowController {
         btn.bezelStyle = .rounded
         btn.controlSize = .small
         btn.font = .systemFont(ofSize: 12, weight: .medium)
+    }
+}
+
+// MARK: - AVAudioPlayerDelegate
+
+extension AudioPickerWindowController: AVAudioPlayerDelegate {
+    func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            self?.stopPreview()
+        }
     }
 }
 
