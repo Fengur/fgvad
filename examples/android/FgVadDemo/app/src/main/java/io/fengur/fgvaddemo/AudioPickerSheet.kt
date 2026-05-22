@@ -1,5 +1,8 @@
 package io.fengur.fgvaddemo
 
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -12,30 +15,83 @@ import java.io.File
 
 class AudioPickerSheet : BottomSheetDialogFragment() {
 
-    /** ▶预 触发：把 ShortArray PCM 直接交给宿主播放（host 自己持有 SentencePlayer） */
-    var onPreview: ((label: String, samples: ShortArray) -> Unit)? = null
-
     /** ▶析 触发：sheet 自动 dismiss，host 调 runAnalyze */
     var onAnalyze: ((label: String, samples: ShortArray) -> Unit)? = null
 
     private lateinit var adapter: AudioPickerAdapter
 
+    // ── 内部 preview 播放器 ──────────────────────────────────────────
+    private var previewPlayer: AudioTrack? = null
+    private var playingItemId: String? = null
+
+    private fun togglePreview(item: AudioPickerAdapter.Row.Item) {
+        val id = item.label
+        if (playingItemId == id) {
+            stopPreview()
+            return
+        }
+        stopPreview()
+        Thread {
+            try {
+                val pcm = item.opener().use { WavReader.read(it) }
+                requireActivity().runOnUiThread { startPlay(pcm, id) }
+            } catch (t: Throwable) {
+                DemoLogger.get().e("Picker", "preview wav read failed: ${t.message}")
+            }
+        }.start()
+    }
+
+    private fun startPlay(pcm: ShortArray, id: String) {
+        val bufBytes = pcm.size * 2
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+            )
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(16_000)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build()
+            )
+            .setBufferSizeInBytes(bufBytes)
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .build()
+        track.write(pcm, 0, pcm.size)
+        track.setNotificationMarkerPosition(pcm.size)
+        track.setPlaybackPositionUpdateListener(object : AudioTrack.OnPlaybackPositionUpdateListener {
+            override fun onMarkerReached(t: AudioTrack?) {
+                requireActivity().runOnUiThread { stopPreview() }
+            }
+            override fun onPeriodicNotification(t: AudioTrack?) {}
+        })
+        track.play()
+        previewPlayer = track
+        playingItemId = id
+        adapter.setPlayingItemId(id)
+    }
+
+    private fun stopPreview() {
+        previewPlayer?.let {
+            try { it.stop() } catch (_: Throwable) {}
+            it.release()
+        }
+        previewPlayer = null
+        if (playingItemId != null) {
+            playingItemId = null
+            adapter.setPlayingItemId(null)
+        }
+    }
+    // ─────────────────────────────────────────────────────────────────
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?,
     ): View {
         adapter = AudioPickerAdapter(
-            onPreviewClicked = { item ->
-                Thread {
-                    try {
-                        val pcm = item.opener().use { WavReader.read(it) }
-                        requireActivity().runOnUiThread {
-                            onPreview?.invoke(item.label, pcm)
-                        }
-                    } catch (t: Throwable) {
-                        DemoLogger.get().e("Picker", "preview wav read failed: ${t.message}")
-                    }
-                }.start()
-            },
+            onPreviewClicked = { item -> togglePreview(item) },
             onAnalyzeClicked = { item ->
                 Thread {
                     try {
@@ -89,6 +145,16 @@ class AudioPickerSheet : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         reload()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        stopPreview()
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        stopPreview()
     }
 
     fun reload() {

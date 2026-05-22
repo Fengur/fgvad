@@ -253,10 +253,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLoadAudioDialog() {
         val sheet = AudioPickerSheet()
-        sheet.onPreview = { label, samples ->
-            logger.i("Picker", "preview $label (${samples.size} samples)")
-            SentencePlayer.play(samples)
-        }
         sheet.onAnalyze = { label, samples ->
             runAnalyze(label, samples)
         }
@@ -287,6 +283,7 @@ class MainActivity : AppCompatActivity() {
             val chunkSize = 1024
             var offset = 0
             var collected = 0
+            var forceCutCount = 0
             while (offset < pcm.size) {
                 val n = minOf(chunkSize, pcm.size - offset)
                 val chunk = if (offset == 0 && n == pcm.size) pcm else pcm.copyOfRange(offset, offset + n)
@@ -295,6 +292,7 @@ class MainActivity : AppCompatActivity() {
                     if (r.event != Event.None) {
                         logger.i("VAD", "event=${r.event} startMs=${r.startMs.toInt()}")
                     }
+                    if (r.event == Event.SentenceForceCut) forceCutCount += 1
                     if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
                         collected += 1
                         val captured = collected
@@ -313,8 +311,9 @@ class MainActivity : AppCompatActivity() {
             v.stop()
             val end = v.endReason()
             v.close()
-            logger.i("App", "runAnalyze done: $label, $collected sentences, endReason=$end")
-            ui.post { statusLabel.text = "状态：重跑完成 · $collected 句 · $end" }
+            logger.i("App", "runAnalyze done: $label, $collected sentences, forceCut=$forceCutCount, endReason=$end")
+            val counts = if (forceCutCount > 0) "$collected 句（$forceCutCount ForceCut）" else "$collected 句"
+            ui.post { statusLabel.text = "状态：重跑完成 · $counts · ${reasonText(end)}" }
         }.start()
     }
 

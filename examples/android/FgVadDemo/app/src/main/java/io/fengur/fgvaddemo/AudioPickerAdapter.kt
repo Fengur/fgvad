@@ -25,9 +25,15 @@ class AudioPickerAdapter(
     }
 
     private var rows: List<Row> = emptyList()
+    private var playingItemId: String? = null
 
     fun submitList(newRows: List<Row>) {
         rows = newRows
+        notifyDataSetChanged()
+    }
+
+    fun setPlayingItemId(id: String?) {
+        playingItemId = id
         notifyDataSetChanged()
     }
 
@@ -61,6 +67,7 @@ class AudioPickerAdapter(
             is Row.Item -> {
                 val h = holder as ItemVH
                 h.label.text = r.label
+                h.previewBtn.text = if (r.label == playingItemId) "⏸ 停" else "▶ 预"
                 h.previewBtn.setOnClickListener { onPreviewClicked(r) }
                 h.analyzeBtn.setOnClickListener { onAnalyzeClicked(r) }
                 h.deleteBtn.visibility = if (r.isDeletable) View.VISIBLE else View.GONE
