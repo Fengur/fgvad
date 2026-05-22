@@ -16,3 +16,7 @@ examples/android/FgVadDemo/local.properties
 examples/android/FgVadDemo/.idea/
 examples/android/FgVadDemo/.kotlin/
 examples/android/FgVadDemo/app/.kotlin/
+
+# iOS / macOS xcodebuild 出来的 derivedDataPath（CLI build 用）
+examples/ios/FgVadDemo/build/
+examples/macos/FgVadDemo/build/
