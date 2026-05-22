@@ -1,11 +1,13 @@
 package io.fengur.fgvaddemo
 
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import io.fengur.fgvad.Event
 
 class SentenceAdapter : RecyclerView.Adapter<SentenceAdapter.VH>() {
 
@@ -21,7 +23,13 @@ class SentenceAdapter : RecyclerView.Adapter<SentenceAdapter.VH>() {
 
     override fun onBindViewHolder(holder: VH, position: Int) {
         val s = items[position]
-        holder.title.text = "Sentence ${s.index} | ${s.endEvent} | ${formatMs(s.startMs)} - ${formatMs(s.endMs)}"
+        holder.title.text = "Sentence ${s.index} | ${formatMs(s.startMs)} - ${formatMs(s.endMs)}"
+        val isForceCut = s.endEvent == Event.SentenceForceCut
+        holder.event.text = if (isForceCut) "ForceCut" else "SentenceEnded"
+        holder.event.setTextColor(
+            if (isForceCut) Color.parseColor("#FF9500")   // systemOrange
+            else Color.parseColor("#34C759")               // systemGreen
+        )
         holder.play.isEnabled = s.audio != null
         holder.play.setOnClickListener {
             s.audio?.let { SentencePlayer.play(it) }
@@ -32,6 +40,7 @@ class SentenceAdapter : RecyclerView.Adapter<SentenceAdapter.VH>() {
 
     class VH(view: View) : RecyclerView.ViewHolder(view) {
         val title: TextView = view.findViewById(R.id.sentenceTitle)
+        val event: TextView = view.findViewById(R.id.sentenceEvent)
         val play: Button = view.findViewById(R.id.playBtn)
     }
 

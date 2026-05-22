@@ -13,6 +13,12 @@
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:textSize="13sp" />
+    <TextView
+        android:id="@+id/sentenceEvent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:layout_marginEnd="8dp" />
     <Button
         android:id="@+id/playBtn"
         style="?attr/buttonBarButtonStyle"

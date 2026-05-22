@@ -28,6 +28,8 @@ class MainActivity : AppCompatActivity() {
     private var vad: FgVad? = null
     private var sentenceCount = 0
     private var wavWriter: WavWriter? = null
+    // mic 录音路径：跨 onPcm 调用跟踪当前句子起点（SentenceStarted 时设，SentenceEnded/ForceCut 时用后清）
+    private var curStartMs: Double? = null
 
     private fun recordingsDir(): java.io.File =
         java.io.File(getExternalFilesDir(null), "recordings").also { it.mkdirs() }
@@ -156,6 +158,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun startSession() {
         sentenceCount = 0
+        curStartMs = null
         sentenceAdapter.clear()
 
         vad = when (currentMode) {
@@ -195,6 +198,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopSession(reason: String) {
+        curStartMs = null
         recorder.stop()
         vad?.stop()
         val end = vad?.endReason() ?: EndReason.None
@@ -232,13 +236,18 @@ class MainActivity : AppCompatActivity() {
             if (r.event != Event.None) {
                 logger.i("VAD", "event=${r.event} state=${r.state} startMs=${r.startMs.toInt()}")
             }
-            if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
+            if (r.event == Event.SentenceStarted) {
+                curStartMs = r.startMs
+            } else if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
+                val sentenceStartMs = curStartMs ?: r.startMs  // fallback 防漏
+                val sentenceEndMs = r.startMs + r.durationMs
+                curStartMs = null
                 sentenceCount += 1
                 sentenceAdapter.add(
                     Sentence(
                         index = sentenceCount,
-                        startMs = r.startMs,
-                        endMs = r.endMs,
+                        startMs = sentenceStartMs,
+                        endMs = sentenceEndMs,
                         endEvent = r.event,
                         audio = r.audioSamples,
                     )
@@ -284,6 +293,7 @@ class MainActivity : AppCompatActivity() {
             var offset = 0
             var collected = 0
             var forceCutCount = 0
+            var curStartMsLocal: Double? = null   // runAnalyze 路径：跟踪当前句子起点
             while (offset < pcm.size) {
                 val n = minOf(chunkSize, pcm.size - offset)
                 val chunk = if (offset == 0 && n == pcm.size) pcm else pcm.copyOfRange(offset, offset + n)
@@ -292,15 +302,22 @@ class MainActivity : AppCompatActivity() {
                     if (r.event != Event.None) {
                         logger.i("VAD", "event=${r.event} startMs=${r.startMs.toInt()}")
                     }
-                    if (r.event == Event.SentenceForceCut) forceCutCount += 1
-                    if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
+                    if (r.event == Event.SentenceStarted) {
+                        curStartMsLocal = r.startMs
+                    } else if (r.event == Event.SentenceEnded || r.event == Event.SentenceForceCut) {
+                        if (r.event == Event.SentenceForceCut) forceCutCount += 1
+                        val sentenceStartMs = curStartMsLocal ?: r.startMs  // fallback 防漏
+                        val sentenceEndMs = r.startMs + r.durationMs
+                        curStartMsLocal = null
                         collected += 1
                         val captured = collected
+                        val startSnapshot = sentenceStartMs
+                        val endSnapshot = sentenceEndMs
                         val rr = r
                         ui.post {
                             sentenceCount = captured
                             sentenceAdapter.add(
-                                Sentence(captured, rr.startMs, rr.endMs, rr.event, rr.audioSamples)
+                                Sentence(captured, startSnapshot, endSnapshot, rr.event, rr.audioSamples)
                             )
                             statusLabel.text = "状态：解析中… · $sentenceCount 句"
                         }
@@ -319,6 +336,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        curStartMs = null
         recorder.stop()
         vad?.stop()
         vad?.close()
