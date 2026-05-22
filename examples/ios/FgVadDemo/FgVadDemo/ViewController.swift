@@ -712,7 +712,10 @@ final class ViewController: UIViewController {
                 self.isAnalyzing = false
                 self.recordButton.isEnabled = true
                 self.loadTestAudioButton.isEnabled = true
-                self.statusLabel.text = "重跑完成 · \(sentenceCount) 句 · \(finalEndReason.label)"
+                let counts = forceCutCount > 0
+                    ? "\(sentenceCount) 句（\(forceCutCount) ForceCut）"
+                    : "\(sentenceCount) 句"
+                self.statusLabel.text = "状态：重跑完成 · \(counts) · \(Self.reasonText(finalEndReason))"
                 let toastMsg: String
                 if forceCutCount > 0 {
                     toastMsg = "✓ \(sentenceCount) 句 · \(forceCutCount) ForceCut\n\(elapsedMs)ms"
@@ -721,6 +724,18 @@ final class ViewController: UIViewController {
                 }
                 self.showToast(toastMsg, duration: 2.2)
             }
+        }
+    }
+
+    /// 将 FgVadEndReason 映射为中文短语。
+    private static func reasonText(_ reason: FgVadEndReason) -> String {
+        switch reason {
+        case FgVadEndReason_None_:               return "已停止"
+        case FgVadEndReason_SpeechCompleted:     return "完成"
+        case FgVadEndReason_HeadSilenceTimeout:  return "头部超时"
+        case FgVadEndReason_MaxDurationReached:  return "时长上限"
+        case FgVadEndReason_ExternalStop:        return "用户停止"
+        default:                                 return reason.label
         }
     }
 }

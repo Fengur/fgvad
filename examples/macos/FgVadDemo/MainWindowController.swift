@@ -761,7 +761,10 @@ final class MainWindowController: NSWindowController {
                 self.isAnalyzing = false
                 self.loadWavButton.isEnabled = true
                 self.progressSpinner.stopAnimation(nil)
-                self.statusLabel.stringValue = "状态：重跑完成 · \(sentenceCount) 句 · \(Self.reasonText(finalEndReason))"
+                let counts = forceCutCount > 0
+                    ? "\(sentenceCount) 句（\(forceCutCount) ForceCut）"
+                    : "\(sentenceCount) 句"
+                self.statusLabel.stringValue = "状态：重跑完成 · \(counts) · \(Self.reasonText(finalEndReason))"
             }
         }
     }
