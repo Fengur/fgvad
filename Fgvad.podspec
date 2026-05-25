@@ -49,21 +49,20 @@ Pod::Spec.new do |s|
   # CocoaPods 不直接支持远程 XCFramework URL,用 prepare_command 在 pod install
   # 时下载 + 解压两个 xcframework 到 dist/。
   s.prepare_command = <<-CMD
-    set -euo pipefail
+    export LC_ALL=C LANG=C
+    set -e
     RELEASE_BASE="https://github.com/Fengur/fgvad/releases/download/v#{s.version}"
     mkdir -p dist
 
     if [ ! -d dist/FgvadCore.xcframework ]; then
-      echo "==> 下载 FgvadCore.xcframework.zip"
-      curl -L -o /tmp/FgvadCore.xcframework.zip \
+      curl -fsSL -o /tmp/FgvadCore.xcframework.zip \
         "$RELEASE_BASE/FgvadCore.xcframework.zip"
       unzip -q -o /tmp/FgvadCore.xcframework.zip -d dist
       rm /tmp/FgvadCore.xcframework.zip
     fi
 
     if [ ! -d dist/ten_vad.xcframework ]; then
-      echo "==> 下载 ten_vad.xcframework.zip"
-      curl -L -o /tmp/ten_vad.xcframework.zip \
+      curl -fsSL -o /tmp/ten_vad.xcframework.zip \
         "$RELEASE_BASE/ten_vad.xcframework.zip"
       unzip -q -o /tmp/ten_vad.xcframework.zip -d dist
       rm /tmp/ten_vad.xcframework.zip
