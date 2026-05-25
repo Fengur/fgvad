@@ -12,13 +12,13 @@ cd "$ROOT"
 
 # 2) zip 两个 xcframework
 cd "$ROOT/dist"
-rm -f FgvadCore.xcframework.zip TenVad.xcframework.zip
+rm -f FgvadCore.xcframework.zip ten_vad.xcframework.zip
 
 echo "==> zip FgvadCore.xcframework"
 zip -ry FgvadCore.xcframework.zip FgvadCore.xcframework
 
-echo "==> zip TenVad.xcframework"
-zip -ry TenVad.xcframework.zip TenVad.xcframework
+echo "==> zip ten_vad.xcframework"
+zip -ry ten_vad.xcframework.zip ten_vad.xcframework
 
 # 3) 算 SHA256 checksum(swift package compute-checksum 用的格式)
 echo
@@ -28,5 +28,5 @@ ls -lh "$ROOT/dist"/*.zip
 echo
 echo "Package.swift 用的 checksum:"
 echo "  FgvadCore: $(swift package compute-checksum FgvadCore.xcframework.zip)"
-echo "  TenVad:    $(swift package compute-checksum TenVad.xcframework.zip)"
+echo "  TenVad:    $(swift package compute-checksum ten_vad.xcframework.zip)"
 echo "===================================="

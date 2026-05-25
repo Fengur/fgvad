@@ -19,11 +19,11 @@ let fgvadCoreTarget: Target = useLocalBinaries
       )
 
 let tenVadTarget: Target = useLocalBinaries
-    ? .binaryTarget(name: "TenVad", path: "dist/TenVad.xcframework")
+    ? .binaryTarget(name: "TenVad", path: "dist/ten_vad.xcframework")
     : .binaryTarget(
         name: "TenVad",
-        url: "\(releaseBase)/TenVad.xcframework.zip",
-        checksum: "00cc476d582632c060b830970a73c7e53fbbbf81600826784b933cf99757dbf9"
+        url: "\(releaseBase)/ten_vad.xcframework.zip",
+        checksum: "d928971e9e361d2da4f5b6e24e5cc95d00696906ea616158406eb9e5330f1c04"
       )
 
 let package = Package(

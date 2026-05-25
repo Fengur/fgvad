@@ -39,7 +39,7 @@ mkdir -p "$DIST"
 #    xcodebuild -create-xcframework 直接拿这个目录。
 
 # 4) 清理旧产物(xcodebuild 不接受已存在的 -output)
-rm -rf "$DIST/FgvadCore.xcframework" "$DIST/TenVad.xcframework"
+rm -rf "$DIST/FgvadCore.xcframework" "$DIST/ten_vad.xcframework"
 
 # 5) 合 FgvadCore.xcframework
 echo "==> 合 FgvadCore.xcframework"
@@ -69,7 +69,7 @@ xcodebuild -create-xcframework \
   -framework "$ROOT/vendor/ten-vad/iOS/device/ten_vad.framework" \
   -framework "$TENVAD_SIM_TMP" \
   -framework "$ROOT/vendor/ten-vad/macOS/ten_vad.framework" \
-  -output "$DIST/TenVad.xcframework"
+  -output "$DIST/ten_vad.xcframework"
 
 echo
 echo "完成:"

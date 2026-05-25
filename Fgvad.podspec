@@ -26,7 +26,7 @@ Pod::Spec.new do |s|
   # 远程 XCFramework(从 GitHub Release 下载)
   # 注意:xcframework 的 iOS Simulator 切片仅包含 arm64(vendor ten-vad 库同限制)。
   # x86_64 Simulator 不支持,通过 EXCLUDED_ARCHS 排除。
-  s.vendored_frameworks = 'dist/FgvadCore.xcframework', 'dist/TenVad.xcframework'
+  s.vendored_frameworks = 'dist/FgvadCore.xcframework', 'dist/ten_vad.xcframework'
 
   # 排除 x86_64 simulator — ten-vad vendor 库不提供该架构
   # Xcode 26 beta simulator SDK 中:
@@ -34,8 +34,16 @@ Pod::Spec.new do |s|
   # - SwiftUICore 在 Simulator target 下有 allowable_clients 限制,弱链接让 ld 不报 error
   s.pod_target_xcconfig = {
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'x86_64',
-    'FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]' => '$(inherited) $(SDKROOT)/System/Library/SubFrameworks',
-    'OTHER_LDFLAGS' => '$(inherited) -weak_framework SwiftUICore'
+    # Xcode 26 beta SDK: UIUtilities 位于 SubFrameworks/ 而非 Frameworks/,device 和 simulator 均适用
+    'FRAMEWORK_SEARCH_PATHS' => '$(inherited) $(SDKROOT)/System/Library/SubFrameworks',
+    # Xcode 26 beta SDK: SwiftUICore.tbd 限制了 allowable_clients,Swift auto-link 会
+    # 通过 UIKit 传递性引入 SwiftUICore 并触发 ld 错误。
+    # -Xfrontend -disable-autolink-framework -Xfrontend SwiftUICore 让 Swift 编译器
+    # 不向 ld 提交 SwiftUICore 链接请求,彻底绕过该限制。
+    'OTHER_SWIFT_FLAGS' => '$(inherited) -Xfrontend -disable-autolink-framework -Xfrontend SwiftUICore',
+    # CocoaPods 对 dynamic vendored xcframework(ten_vad)默认只把 -framework 推到 consumer
+    # App layer,但 libfgvad.a 直接引用了 ten_vad 的 C 符号,必须在 Pod target 链接时一并解析。
+    'OTHER_LDFLAGS' => '$(inherited) -framework ten_vad'
   }
 
   # CocoaPods 不直接支持远程 XCFramework URL,用 prepare_command 在 pod install
