@@ -55,5 +55,11 @@ if(APPLE)
   )
 endif()
 
-# CTest 占位,测试在 Task 2 加入
+# CTest
 enable_testing()
+
+add_executable(test_wav_io tests/test_wav_io.c src/wav_io.c)
+target_include_directories(test_wav_io PRIVATE src)
+target_compile_options(test_wav_io PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME wav_io COMMAND test_wav_io
+         WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
