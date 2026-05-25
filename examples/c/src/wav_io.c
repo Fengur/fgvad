@@ -4,7 +4,6 @@
 #include <string.h>
 #include <stdint.h>
 
-#pragma pack(push, 1)
 typedef struct {
     char     riff_id[4];   /* "RIFF" */
     uint32_t riff_size;
@@ -24,7 +23,6 @@ typedef struct {
     uint16_t block_align;
     uint16_t bits_per_sample;
 } FmtChunk;
-#pragma pack(pop)
 
 int wav_read_mono16k(const char *path, int16_t **out_samples, size_t *out_count) {
     *out_samples = NULL;
@@ -56,9 +54,13 @@ int wav_read_mono16k(const char *path, int16_t **out_samples, size_t *out_count)
             if (fread(&fmt, sizeof(FmtChunk), 1, fp) != 1) {
                 fclose(fp); return WAV_ERR_IO;
             }
-            /* 跳过 fmt 扩展字段 */
+            /* 跳过 fmt 扩展字段，RIFF 规范要求偶数边界 */
             if (ch.size > (uint32_t)sizeof(FmtChunk)) {
-                fseek(fp, (long)(ch.size - sizeof(FmtChunk)), SEEK_CUR);
+                long skip = (long)(ch.size - sizeof(FmtChunk));
+                skip += skip & 1L;  /* pad to even */
+                if (fseek(fp, skip, SEEK_CUR) != 0) {
+                    fclose(fp); return WAV_ERR_IO;
+                }
             }
             got_fmt = 1;
             if (fmt.audio_format   != 1     ||
@@ -69,6 +71,7 @@ int wav_read_mono16k(const char *path, int16_t **out_samples, size_t *out_count)
             }
         } else if (memcmp(ch.id, "data", 4) == 0) {
             if (!got_fmt) { fclose(fp); return WAV_ERR_FORMAT; }
+            if (ch.size == 0) { fclose(fp); return WAV_ERR_FORMAT; }
             size_t n = ch.size / 2;
             int16_t *buf = (int16_t *)malloc(n * sizeof(int16_t));
             if (!buf) { fclose(fp); return WAV_ERR_IO; }
@@ -80,8 +83,10 @@ int wav_read_mono16k(const char *path, int16_t **out_samples, size_t *out_count)
             fclose(fp);
             return WAV_OK;
         } else {
-            /* 跳过未知 chunk（LIST/INFO 等） */
-            fseek(fp, (long)ch.size, SEEK_CUR);
+            /* 跳过未知 chunk（LIST/INFO 等），RIFF 规范要求偶数边界 */
+            if (fseek(fp, (long)(ch.size + (ch.size & 1u)), SEEK_CUR) != 0) {
+                fclose(fp); return WAV_ERR_IO;
+            }
         }
     }
 }
