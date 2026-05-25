@@ -20,3 +20,4 @@ examples/android/FgVadDemo/app/.kotlin/
 # iOS / macOS xcodebuild 出来的 derivedDataPath（CLI build 用）
 examples/ios/FgVadDemo/build/
 examples/macos/FgVadDemo/build/
+examples/c/build/
