@@ -39,8 +39,13 @@ set_target_properties(fgvad PROPERTIES
   IMPORTED_LOCATION "${FGVAD_DYLIB}"
 )
 
-add_executable(fgvad_cli src/fgvad_cli.c)
+add_executable(fgvad_cli
+  src/fgvad_cli.c
+  src/wav_io.c
+  src/event_fmt.c
+)
 target_include_directories(fgvad_cli PRIVATE "${FGVAD_ROOT}/include")
+target_include_directories(fgvad_cli PRIVATE src)
 target_link_libraries(fgvad_cli PRIVATE fgvad)
 target_compile_options(fgvad_cli PRIVATE -Wall -Wextra -Wpedantic)
 # Debug 构建可额外开启 sanitizer:
