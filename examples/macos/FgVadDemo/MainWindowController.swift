@@ -1,6 +1,7 @@
 import AppKit
 import AVFoundation
 import SnapKit
+import Fgvad
 
 /// 主窗口：顶部 mode toggle、config 表单、录音/重跑按钮、状态显示。
 /// 录音进行中走流式（实时喂 analyzer），短时遇到 SentenceEnd 自动停止。

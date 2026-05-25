@@ -1,5 +1,5 @@
 import Foundation
-import CFgvad
+@_exported import CFgvad
 
 /// fgvad C API 的 Swift 封装。
 /// - 实例版（`init(mode:)` → `start` → `feed` → `stop`）用于录音时流式喂入

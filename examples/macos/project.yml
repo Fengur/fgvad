@@ -9,6 +9,8 @@ packages:
   SnapKit:
     url: https://github.com/SnapKit/SnapKit
     from: "5.7.0"
+  Fgvad:
+    path: ../..  # 仓库根
 
 targets:
   FgVadDemo:
@@ -16,9 +18,8 @@ targets:
     platform: macOS
     dependencies:
       - package: SnapKit
-      - framework: ../../vendor/ten-vad/macOS/ten_vad.framework
-        embed: true
-        codeSign: true
+      - package: Fgvad
+        product: Fgvad
     info:
       path: FgVadDemo/Info.plist
       properties:
@@ -40,39 +41,7 @@ targets:
         buildPhase: resources
     settings:
       base:
-        SWIFT_OBJC_BRIDGING_HEADER: FgVadDemo-Bridging-Header.h
-        HEADER_SEARCH_PATHS:
-          - $(PROJECT_DIR)/../../include
-        LIBRARY_SEARCH_PATHS:
-          - $(PROJECT_DIR)/../../target/universal-apple-darwin/debug
-          - $(PROJECT_DIR)/../../target/universal-apple-darwin/release
-        OTHER_LDFLAGS:
-          - -lfgvad
         LD_RUNPATH_SEARCH_PATHS:
           - "@executable_path/../Frameworks"
         # 允许非签名的 dylib（开发期用 cargo 产出的 libfgvad.dylib）
         ENABLE_HARDENED_RUNTIME: "NO"
-    preBuildScripts:
-      - name: "构建 fgvad universal (arm64 + x86_64)"
-        script: |
-          set -e
-          # Xcode GUI 跑脚本时 PATH 极简，手动补上常见的 Rust/Homebrew 路径
-          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-          if ! command -v cargo >/dev/null 2>&1; then
-            echo "error: 找不到 cargo。请确保 rustup 已安装（https://rustup.rs）。" >&2
-            exit 1
-          fi
-          cd "$PROJECT_DIR/../.."
-          # 同时编 arm64 + x86_64，lipo 成 universal binary，支持 Intel Mac
-          ./scripts/build-macos-universal.sh
-        basedOnDependencyAnalysis: false
-    postBuildScripts:
-      - name: "复制 universal libfgvad.dylib 到 Frameworks 并修 rpath"
-        script: |
-          set -e
-          FRAMEWORKS_DIR="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
-          mkdir -p "$FRAMEWORKS_DIR"
-          cp -f "$PROJECT_DIR/../../target/universal-apple-darwin/debug/libfgvad.dylib" "$FRAMEWORKS_DIR/libfgvad.dylib"
-          chmod 755 "$FRAMEWORKS_DIR/libfgvad.dylib"
-          codesign --force --sign - "$FRAMEWORKS_DIR/libfgvad.dylib" || true
-        basedOnDependencyAnalysis: false
