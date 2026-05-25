@@ -57,6 +57,25 @@ int main(int argc, char **argv) {
     fprintf(stderr, "已读入 %zu 个采样点 (~%.2f 秒)\n",
             sample_count, (double)sample_count / 16000.0);
 
+    /* dump_dir 可写性预检 */
+    if (dump_dir) {
+        char probe_path[1024];
+        int n = snprintf(probe_path, sizeof(probe_path), "%s/.fgvad_probe", dump_dir);
+        if (n < 0 || n >= (int)sizeof(probe_path)) {
+            fprintf(stderr, "dump 路径过长: %s\n", dump_dir);
+            free(samples);
+            return 1;
+        }
+        FILE *probe = fopen(probe_path, "wb");
+        if (!probe) {
+            fprintf(stderr, "dump 目录不可写: %s (请先 mkdir -p)\n", dump_dir);
+            free(samples);
+            return 1;
+        }
+        fclose(probe);
+        remove(probe_path);
+    }
+
     /* 创建 VAD 实例 */
     struct FgVad *vad;
     if (mode == MODE_SHORT) {
@@ -103,8 +122,17 @@ int main(int argc, char **argv) {
 
             /* dump 句子(Task 5 实现) */
             if (dump_dir) {
-                /* TODO Task 5: 写 sentence_NNN.wav 到 dump_dir */
-                (void)sent_idx;
+                char out_path[1024];
+                int m = snprintf(out_path, sizeof(out_path),
+                                 "%s/sentence_%03zu.wav", dump_dir, sent_idx);
+                if (m < 0 || m >= (int)sizeof(out_path)) {
+                    fprintf(stderr, "  路径过长,跳过句 %zu\n", sent_idx);
+                } else {
+                    int wrc = wav_write_mono16k(out_path, v.audio_ptr, v.audio_len);
+                    if (wrc != WAV_OK) {
+                        fprintf(stderr, "  写 %s 失败 (rc=%d)\n", out_path, wrc);
+                    }
+                }
             }
         } else {
             printf("[%s] %-22s state=%s\n",
