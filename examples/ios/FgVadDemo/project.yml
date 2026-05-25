@@ -5,6 +5,10 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
 
+packages:
+  Fgvad:
+    path: ../../..  # 仓库根,Package.swift 在那里
+
 targets:
   FgVadDemo:
     type: application
@@ -36,52 +40,17 @@ targets:
         group: TestAudio
         type: folder
         buildPhase: resources
+    dependencies:
+      - package: Fgvad
+        product: Fgvad
     settings:
       base:
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_OBJC_BRIDGING_HEADER: FgVadDemo/FgVadDemo-Bridging-Header.h
-        # fgvad.h 在仓库根 include/ 目录
-        HEADER_SEARCH_PATHS:
-          - $(PROJECT_DIR)/../../../include
-        # cargo target/ 路径——按 iOS 平台分流
-        LIBRARY_SEARCH_PATHS[sdk=iphoneos*]:
-          - $(PROJECT_DIR)/../../../target/aarch64-apple-ios/debug
-          - $(PROJECT_DIR)/../../../target/aarch64-apple-ios/release
-        LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]:
-          - $(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/debug
-          - $(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/release
-        # ten_vad.framework 路径同样按平台分流
-        FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]:
-          - $(PROJECT_DIR)/../../../vendor/ten-vad/iOS/device
-        FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]:
-          - $(PROJECT_DIR)/../../../vendor/ten-vad/iOS/simulator
-        OTHER_LDFLAGS:
-          - -lfgvad
-          - -framework
-          - ten_vad
         LD_RUNPATH_SEARCH_PATHS:
           - "@executable_path/Frameworks"
         ENABLE_HARDENED_RUNTIME: "NO"
-    preBuildScripts:
-      - name: "构建 fgvad iOS 产物"
-        script: |
-          set -e
-          export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-          if ! command -v cargo >/dev/null 2>&1; then
-            echo "error: 找不到 cargo。请装 rustup（https://rustup.rs）。" >&2
-            exit 1
-          fi
-          cd "$PROJECT_DIR/../../.."
-          # 根据 sdk 分流（iphoneos 或 iphonesimulator）
-          if [[ "$EFFECTIVE_PLATFORM_NAME" == "-iphoneos" ]]; then
-            echo "==> cargo build aarch64-apple-ios (device)"
-            cargo build --target=aarch64-apple-ios
-          else
-            echo "==> cargo build aarch64-apple-ios-sim (simulator)"
-            cargo build --target=aarch64-apple-ios-sim
-          fi
-        basedOnDependencyAnalysis: false
     postBuildScripts:
       - name: "嵌入 libfgvad.dylib 和 ten_vad.framework 到 .app"
         script: |

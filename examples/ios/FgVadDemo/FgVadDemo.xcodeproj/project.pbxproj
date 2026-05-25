@@ -10,12 +10,12 @@
 		23B6C0ACE92A65A2E2CB8AD6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6919528C5915CD513C79D27B /* Assets.xcassets */; };
 		32F6DEEBA64F231D66B1EC7B /* short in Resources */ = {isa = PBXBuildFile; fileRef = D08ABA89F3AD5765E4AB3D60 /* short */; };
 		3ADC469513B8F30B182D48F8 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0A40BA77A0321E064E45D3 /* AppDelegate.swift */; };
+		4F33CCC22749D6300102BA53 /* Fgvad in Frameworks */ = {isa = PBXBuildFile; productRef = E87A1BDD9F439E66ECDB5816 /* Fgvad */; };
 		583B9A9B8070A2F00430A55A /* long in Resources */ = {isa = PBXBuildFile; fileRef = 48D43C157DA25CA47E792E87 /* long */; };
 		5B8FAAAE549AFBD2186E1498 /* AudioPickerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 015B7E3E247F67CCA13326D7 /* AudioPickerViewController.swift */; };
 		8359FE2B44A370431EC9C78A /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6D8BB17FD23369CD081B25F /* ViewController.swift */; };
 		8990055A0B42CDDC1657336A /* DemoLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51ED3096EA5A9DDBC08809F7 /* DemoLogger.swift */; };
 		A18655AB0F16BFFAAADAC9A8 /* FGAudioController.m in Sources */ = {isa = PBXBuildFile; fileRef = 11EAF785075DABA8753AC025 /* FGAudioController.m */; };
-		A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */; };
 		BAFBF2A3655AE1012BBBF76C /* WavWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751612500CE3B7E7829245D0 /* WavWriter.swift */; };
 		D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCC8FC3869527CBE32A1FBCE /* WavIO.swift */; };
 		F8DEC8F5AA1FAA8F524AE4B8 /* FGIOSRecorder.m in Sources */ = {isa = PBXBuildFile; fileRef = 641C1D13B18A302F0E71D888 /* FGIOSRecorder.m */; };
@@ -28,18 +28,29 @@
 		3CFFF22DF8EF77B47C8C1E01 /* FgVadDemo-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "FgVadDemo-Bridging-Header.h"; sourceTree = "<group>"; };
 		48D43C157DA25CA47E792E87 /* long */ = {isa = PBXFileReference; lastKnownFileType = folder; name = long; path = "../../../test-data/long"; sourceTree = SOURCE_ROOT; };
 		51ED3096EA5A9DDBC08809F7 /* DemoLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoLogger.swift; sourceTree = "<group>"; };
+		61F72E3195BCDCB87E525C77 /* fgvad */ = {isa = PBXFileReference; lastKnownFileType = folder; name = fgvad; path = ../../..; sourceTree = SOURCE_ROOT; };
 		641C1D13B18A302F0E71D888 /* FGIOSRecorder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FGIOSRecorder.m; sourceTree = "<group>"; };
 		6919528C5915CD513C79D27B /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		751612500CE3B7E7829245D0 /* WavWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavWriter.swift; sourceTree = "<group>"; };
 		7C627B9D2A123A64C391AD37 /* FgVadDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = FgVadDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8660703F0AB737C89F158ED8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FgVadAnalyzer.swift; sourceTree = "<group>"; };
 		B6D8BB17FD23369CD081B25F /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
 		CCC8FC3869527CBE32A1FBCE /* WavIO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WavIO.swift; sourceTree = "<group>"; };
 		D08ABA89F3AD5765E4AB3D60 /* short */ = {isa = PBXFileReference; lastKnownFileType = folder; name = short; path = "../../../test-data/short"; sourceTree = SOURCE_ROOT; };
 		D99A9EB8309363FFB31A5457 /* FGAudioController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FGAudioController.h; sourceTree = "<group>"; };
 		EFA3FCBDD4F51994EAD771D6 /* FGIOSRecorder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FGIOSRecorder.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D21903F6067603FA752DCCBD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4F33CCC22749D6300102BA53 /* Fgvad in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		00D6AFFC9167E7E79158EB6B /* Products */ = {
@@ -50,10 +61,19 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		573EF2F2C461F2D9A3396BF4 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				61F72E3195BCDCB87E525C77 /* fgvad */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		6ABAF325E65462F36987642A = {
 			isa = PBXGroup;
 			children = (
 				E17AB3B01689F9DB6F6A7163 /* FgVadDemo */,
+				573EF2F2C461F2D9A3396BF4 /* Packages */,
 				81274B44131DC54E352F5351 /* TestAudio */,
 				00D6AFFC9167E7E79158EB6B /* Products */,
 			);
@@ -79,7 +99,6 @@
 				11EAF785075DABA8753AC025 /* FGAudioController.m */,
 				EFA3FCBDD4F51994EAD771D6 /* FGIOSRecorder.h */,
 				641C1D13B18A302F0E71D888 /* FGIOSRecorder.m */,
-				B295608CFCD6CAC8FC76E8D3 /* FgVadAnalyzer.swift */,
 				3CFFF22DF8EF77B47C8C1E01 /* FgVadDemo-Bridging-Header.h */,
 				8660703F0AB737C89F158ED8 /* Info.plist */,
 				B6D8BB17FD23369CD081B25F /* ViewController.swift */,
@@ -96,9 +115,9 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7FE59827F9FBB3D756EDB171 /* Build configuration list for PBXNativeTarget "FgVadDemo" */;
 			buildPhases = (
-				E5E770E8081DAE3D8FE8F3E9 /* 构建 fgvad iOS 产物 */,
 				71D24BB95240F048EA29D409 /* Sources */,
 				208BB9976B4CB727A2710B84 /* Resources */,
+				D21903F6067603FA752DCCBD /* Frameworks */,
 				92F8FE905B9EECB408C72C1B /* 嵌入 libfgvad.dylib 和 ten_vad.framework 到 .app */,
 			);
 			buildRules = (
@@ -107,6 +126,7 @@
 			);
 			name = FgVadDemo;
 			packageProductDependencies = (
+				E87A1BDD9F439E66ECDB5816 /* Fgvad */,
 			);
 			productName = FgVadDemo;
 			productReference = 7C627B9D2A123A64C391AD37 /* FgVadDemo.app */;
@@ -132,6 +152,9 @@
 			);
 			mainGroup = 6ABAF325E65462F36987642A;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				99371144F37F8269FB3B33DB /* XCLocalSwiftPackageReference "../../.." */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 00D6AFFC9167E7E79158EB6B /* Products */;
 			projectDirPath = "";
@@ -175,25 +198,6 @@
 			shellPath = /bin/sh;
 			shellScript = "set -e\nFRAMEWORKS_DIR=\"$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH\"\nmkdir -p \"$FRAMEWORKS_DIR\"\n\n# 选对应平台的 cargo target 目录\nif [[ \"$EFFECTIVE_PLATFORM_NAME\" == \"-iphoneos\" ]]; then\n  RUST_TARGET=\"aarch64-apple-ios\"\n  TEN_VAD_DIR=\"$PROJECT_DIR/../../../vendor/ten-vad/iOS/device\"\nelse\n  RUST_TARGET=\"aarch64-apple-ios-sim\"\n  TEN_VAD_DIR=\"$PROJECT_DIR/../../../vendor/ten-vad/iOS/simulator\"\nfi\n\n# 用与 app 相同的签名身份（simulator 时是 -, device 时是 Apple Development 证书 SHA）\nSIGN_IDENTITY=\"${EXPANDED_CODE_SIGN_IDENTITY:--}\"\n\n# 1) libfgvad.dylib\ncp -f \"$PROJECT_DIR/../../../target/$RUST_TARGET/debug/libfgvad.dylib\" \\\n      \"$FRAMEWORKS_DIR/libfgvad.dylib\"\nchmod 755 \"$FRAMEWORKS_DIR/libfgvad.dylib\"\ncodesign --force --sign \"$SIGN_IDENTITY\" \"$FRAMEWORKS_DIR/libfgvad.dylib\"\n\n# 2) ten_vad.framework\nrm -rf \"$FRAMEWORKS_DIR/ten_vad.framework\"\ncp -R \"$TEN_VAD_DIR/ten_vad.framework\" \"$FRAMEWORKS_DIR/\"\ncodesign --force --sign \"$SIGN_IDENTITY\" \"$FRAMEWORKS_DIR/ten_vad.framework\"\n";
 		};
-		E5E770E8081DAE3D8FE8F3E9 /* 构建 fgvad iOS 产物 */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "构建 fgvad iOS 产物";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "set -e\nexport PATH=\"$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"\nif ! command -v cargo >/dev/null 2>&1; then\n  echo \"error: 找不到 cargo。请装 rustup（https://rustup.rs）。\" >&2\n  exit 1\nfi\ncd \"$PROJECT_DIR/../../..\"\n# 根据 sdk 分流（iphoneos 或 iphonesimulator）\nif [[ \"$EFFECTIVE_PLATFORM_NAME\" == \"-iphoneos\" ]]; then\n  echo \"==> cargo build aarch64-apple-ios (device)\"\n  cargo build --target=aarch64-apple-ios\nelse\n  echo \"==> cargo build aarch64-apple-ios-sim (simulator)\"\n  cargo build --target=aarch64-apple-ios-sim\nfi\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -206,7 +210,6 @@
 				8990055A0B42CDDC1657336A /* DemoLogger.swift in Sources */,
 				A18655AB0F16BFFAAADAC9A8 /* FGAudioController.m in Sources */,
 				F8DEC8F5AA1FAA8F524AE4B8 /* FGIOSRecorder.m in Sources */,
-				A2858F2485AE3061069ED31E /* FgVadAnalyzer.swift in Sources */,
 				8359FE2B44A370431EC9C78A /* ViewController.swift in Sources */,
 				D3B6B5DCB361130E78EAB5BA /* WavIO.swift in Sources */,
 				BAFBF2A3655AE1012BBBF76C /* WavWriter.swift in Sources */,
@@ -341,31 +344,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_HARDENED_RUNTIME = NO;
-				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(PROJECT_DIR)/../../../vendor/ten-vad/iOS/device",
-				);
-				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/../../../vendor/ten-vad/iOS/simulator",
-				);
-				HEADER_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/../../../include",
-				);
 				INFOPLIST_FILE = FgVadDemo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios/debug",
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios/release",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/debug",
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/release",
-				);
-				OTHER_LDFLAGS = (
-					"-lfgvad",
-					"-framework",
-					ten_vad,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.fengur.FgVadDemo;
 				SDKROOT = iphoneos;
@@ -381,31 +362,9 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_HARDENED_RUNTIME = NO;
-				"FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(PROJECT_DIR)/../../../vendor/ten-vad/iOS/device",
-				);
-				"FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/../../../vendor/ten-vad/iOS/simulator",
-				);
-				HEADER_SEARCH_PATHS = (
-					"$(PROJECT_DIR)/../../../include",
-				);
 				INFOPLIST_FILE = FgVadDemo/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"@executable_path/Frameworks",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphoneos*]" = (
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios/debug",
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios/release",
-				);
-				"LIBRARY_SEARCH_PATHS[sdk=iphonesimulator*]" = (
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/debug",
-					"$(PROJECT_DIR)/../../../target/aarch64-apple-ios-sim/release",
-				);
-				OTHER_LDFLAGS = (
-					"-lfgvad",
-					"-framework",
-					ten_vad,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.fengur.FgVadDemo;
 				SDKROOT = iphoneos;
@@ -437,6 +396,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		99371144F37F8269FB3B33DB /* XCLocalSwiftPackageReference "../../.." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../..;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E87A1BDD9F439E66ECDB5816 /* Fgvad */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Fgvad;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DDA59502A5DC3033FDEBEB9C /* Project object */;
 }

@@ -1,5 +1,6 @@
 import UIKit
 import AVFoundation
+import Fgvad
 
 /// fgvad iOS Demo 主视图。
 ///
