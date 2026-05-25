@@ -52,11 +52,22 @@ xcodebuild -create-xcframework \
   -headers "$ROOT/include" \
   -output "$DIST/FgvadCore.xcframework"
 
-# 6) 合 TenVad.xcframework(从 vendor/ 三个 slice)
+# 6) 合 TenVad.xcframework
 echo "==> 合 TenVad.xcframework"
+
+# ten_vad simulator framework 的 Info.plist 标的是 iPhoneOS(vendor 用 vtool
+# 改了 binary 平台但 plist 没动),会让 Xcode SPM 拒绝 simulator destination。
+# 复制到临时目录 patch 平台字段后再喂给 xcodebuild。
+TENVAD_SIM_TMP="$(mktemp -d)/ten_vad.framework"
+cp -R "$ROOT/vendor/ten-vad/iOS/simulator/ten_vad.framework" "$TENVAD_SIM_TMP"
+plutil -replace CFBundleSupportedPlatforms -json '["iPhoneSimulator"]' \
+  "$TENVAD_SIM_TMP/Info.plist"
+plutil -replace DTPlatformName -string "iphonesimulator" \
+  "$TENVAD_SIM_TMP/Info.plist"
+
 xcodebuild -create-xcframework \
   -framework "$ROOT/vendor/ten-vad/iOS/device/ten_vad.framework" \
-  -framework "$ROOT/vendor/ten-vad/iOS/simulator/ten_vad.framework" \
+  -framework "$TENVAD_SIM_TMP" \
   -framework "$ROOT/vendor/ten-vad/macOS/ten_vad.framework" \
   -output "$DIST/TenVad.xcframework"
 

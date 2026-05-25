@@ -5,6 +5,16 @@ options:
     iOS: "16.0"
   createIntermediateGroups: true
 
+settings:
+  base:
+    SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+
+schemes:
+  FgVadDemo:
+    build:
+      targets:
+        FgVadDemo: all
+
 packages:
   Fgvad:
     path: ../../..  # 仓库根,Package.swift 在那里
@@ -51,6 +61,8 @@ targets:
         LD_RUNPATH_SEARCH_PATHS:
           - "@executable_path/Frameworks"
         ENABLE_HARDENED_RUNTIME: "NO"
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        ALLOW_TARGET_PLATFORM_SPECIALIZATION: "YES"
     postBuildScripts:
       - name: "嵌入 libfgvad.dylib 和 ten_vad.framework 到 .app"
         script: |
