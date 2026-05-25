@@ -24,3 +24,10 @@ examples/c/build/
 # Swift Package XCFramework 产物
 dist/*.xcframework/
 dist/*.zip
+
+# Swift Package Manager build artifacts
+.build/
+# 仓库根 xcodebuild 临时产物
+/build/
+# 老 macOS demo build 路径（少一层 FgVadDemo/）
+examples/macos/build/
