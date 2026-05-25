@@ -1,5 +1,4 @@
 /target
-/dist
 *.DS_Store
 xcuserdata/
 DerivedData/
@@ -21,3 +20,7 @@ examples/android/FgVadDemo/app/.kotlin/
 examples/ios/FgVadDemo/build/
 examples/macos/FgVadDemo/build/
 examples/c/build/
+
+# Swift Package XCFramework 产物
+dist/*.xcframework/
+dist/*.zip
