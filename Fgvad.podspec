@@ -61,12 +61,12 @@ Pod::Spec.new do |s|
       rm /tmp/FgvadCore.xcframework.zip
     fi
 
-    if [ ! -d dist/TenVad.xcframework ]; then
-      echo "==> 下载 TenVad.xcframework.zip"
-      curl -L -o /tmp/TenVad.xcframework.zip \
-        "$RELEASE_BASE/TenVad.xcframework.zip"
-      unzip -q -o /tmp/TenVad.xcframework.zip -d dist
-      rm /tmp/TenVad.xcframework.zip
+    if [ ! -d dist/ten_vad.xcframework ]; then
+      echo "==> 下载 ten_vad.xcframework.zip"
+      curl -L -o /tmp/ten_vad.xcframework.zip \
+        "$RELEASE_BASE/ten_vad.xcframework.zip"
+      unzip -q -o /tmp/ten_vad.xcframework.zip -d dist
+      rm /tmp/ten_vad.xcframework.zip
     fi
   CMD
 end
