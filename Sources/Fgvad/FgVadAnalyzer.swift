@@ -13,8 +13,13 @@ public final class FgVadAnalyzer {
 
     /// 短时模式:命令/查询式单次交互,尾静音一到就结束整个会话。
     public struct ShortConfig {
+        /// 开始录音后,允许连续静音多久没检测到说话就放弃。
+        /// 适合防止用户按了录音又啥都不说的情况。
         public var headSilenceTimeoutMs: UInt32
+        /// 进入说话状态后,连续静音多久就认为一句话说完、会话结束。
+        /// 是短时模式最关键的参数——太短会切掉正常停顿,太长会让体验显得迟钝。
         public var tailSilenceMs: UInt32
+        /// 单次会话最长时长上限(含静音部分),超时强制结束。
         public var maxDurationMs: UInt32
 
         public init(
@@ -30,11 +35,19 @@ public final class FgVadAnalyzer {
 
     /// 长时模式:连续听写式多句交互,外部不 stop 就一直跑。
     public struct LongConfig {
+        /// 开始录音后允许的最长头部静音(同 ShortConfig.headSilenceTimeoutMs)。
         public var headSilenceTimeoutMs: UInt32
+        /// 单句最长时长;超过强制切出一句(SentenceForceCut 事件),
+        /// 避免用户一口气说太长导致识别器内存/延迟爆炸。
         public var maxSentenceDurationMs: UInt32
+        /// 整个会话最长时长;0 表示不限。到点强制结束。
         public var maxSessionDurationMs: UInt32
+        /// 动态尾端点曲线的初始值——会话刚开始时用这个(较宽容)。
         public var tailSilenceMsInitial: UInt32
+        /// 动态尾端点曲线的下限——说得越久会向这个值收紧,但不会低于它。
         public var tailSilenceMsMin: UInt32
+        /// 是否启用动态尾端点。关掉则尾静音恒等于 tailSilenceMsInitial。
+        /// fgvad 的核心竞争力就是这条曲线,建议保持开启。
         public var enableDynamicTail: Bool
 
         public init(
@@ -131,7 +144,7 @@ public final class FgVadAnalyzer {
     public var state: FgVadState { fgvad_state(vad) }
     public var endReason: FgVadEndReason { fgvad_end_reason(vad) }
 
-    // MARK: - 静态:批式回灌
+    // MARK: - 静态:批式回灌(重跑同一段 PCM)
 
     public static func analyze(
         samples: [Int16], mode: Mode
