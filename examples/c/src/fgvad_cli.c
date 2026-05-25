@@ -38,6 +38,13 @@ int main(int argc, char **argv) {
         else { usage(argv[0]); return 2; }
     }
 
+    /* 多余位置参数应当报错 */
+    if (optind < argc) {
+        fprintf(stderr, "未知参数: %s\n", argv[optind]);
+        usage(argv[0]);
+        return 2;
+    }
+
     /* 读 WAV */
     int16_t *samples = NULL;
     size_t sample_count = 0;
@@ -86,7 +93,9 @@ int main(int argc, char **argv) {
         if (v.event == FgVadEvent_SentenceEnded ||
             v.event == FgVadEvent_SentenceForceCut) {
             sent_idx++;
-            double dur_ms = (double)v.audio_len / 16.0;
+                /* audio_len 单位是样本数; 16kHz 下 /16 得毫秒 */
+                double dur_ms = (double)v.audio_len / 16.0;
+            /* %-22s: 最长 Event label "MaxDurationReached"=18 字符,留 22 保对齐 */
             printf("[%s] %-22s duration=%7.0fms  end_reason=%s\n",
                    ts, fgvad_event_label(v.event), dur_ms,
                    fgvad_end_reason_label(v.end_reason));
