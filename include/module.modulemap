@@ -1,0 +1,4 @@
+module CFgvad {
+    header "fgvad.h"
+    export *
+}
