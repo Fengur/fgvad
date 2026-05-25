@@ -224,6 +224,66 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [ ] CocoaPods / SPM 分发
 - [x] 纯 C CLI 集成示例 —— 见 [`examples/c/`](./examples/c/)（macOS 已支持；Linux/embedded 待后续）
 
+## Installation
+
+### Swift Package Manager（推荐）
+
+支持 **iOS 16+** / **macOS 13+**。
+
+```swift
+// Package.swift dependencies:
+.package(url: "https://github.com/Fengur/fgvad.git", from: "0.1.0")
+```
+
+target 依赖：
+
+```swift
+.product(name: "Fgvad", package: "fgvad")
+```
+
+Xcode 集成：File → Add Package Dependencies，粘贴 URL `https://github.com/Fengur/fgvad.git`。
+
+**开发期 fgvad 本仓库内** 的 demo / 测试要走本地 dist/ 不走远程下载，跑 `swift build` 前 export：
+
+```bash
+export FGVAD_LOCAL_BINARIES=1
+```
+
+### CocoaPods（仅 iOS 16+）
+
+```ruby
+# Podfile
+pod 'Fgvad', :git => 'https://github.com/Fengur/fgvad.git', :tag => 'v0.1.0'
+```
+
+`pod install` 时会自动下载 GitHub Release 上的 XCFramework zip 并解压。**macOS 不走 Pod**，请用 SPM 接入（同一个库，同一个 API）。
+
+### 手动 XCFramework
+
+下载 [v0.1.0 Release](https://github.com/Fengur/fgvad/releases/tag/v0.1.0) 的两个 zip：
+- `FgvadCore.xcframework.zip`
+- `ten_vad.xcframework.zip`
+
+解压后两个 `.xcframework` 拖进 Xcode 项目，Embed & Sign。Swift wrapper 源码也要拷一份（从 [`Sources/Fgvad/FgVadAnalyzer.swift`](./Sources/Fgvad/FgVadAnalyzer.swift) 拷到自己工程）。
+
+### 接入示例
+
+```swift
+import Fgvad
+
+let analyzer = try FgVadAnalyzer(mode: .short(.init()))
+analyzer.start()
+
+// PCM 来源由你决定 —— 录音 / 文件 / 网络流都行，16kHz mono i16
+let results = try samples.withUnsafeBufferPointer { try analyzer.feed($0) }
+for r in results {
+    if r.event == FgVadEvent_SentenceEnded {
+        // 拿到一句完整音频：r.audioLen 个采样
+    }
+}
+analyzer.stop()
+```
+
 ## License
 
 MIT —— 见 [LICENSE](./LICENSE)。底层 ten-vad 遵循 Apache 2.0。
