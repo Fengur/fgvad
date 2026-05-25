@@ -51,8 +51,9 @@ mkdir -p /tmp/fgvad-out
 
 ### 用 dylib(推荐,零配置)
 
-`build.rs` 已经把 ten-vad framework 的 rpath 编进 `libfgvad.dylib`,
-直接链 fgvad 即可,运行时 dyld 会沿 rpath 找到 ten\_vad framework:
+> 这里有两层 rpath:`my_app` 通过 `-Wl,-rpath` 找到 `libfgvad.dylib`;
+> `libfgvad.dylib` 内部已经有 rpath 指向 ten\_vad framework 目录(由 build.rs 编入)。
+> 所以集成方**不需要**额外给 my\_app 加 ten-vad 相关路径。
 
 ```bash
 clang -o my_app my_app.c \
@@ -66,10 +67,13 @@ clang -o my_app my_app.c \
 
 `libfgvad.a` 不带链接信息,必须自己加 `-framework ten_vad`:
 
+> macOS clang 在 `-L` 路径下同时找到 `.dylib` 和 `.a` 时优先用 dylib。
+> 链 staticlib 必须显式给 `.a` 文件的绝对路径(或用 `-Wl,-search_paths_first` 等技巧)。
+
 ```bash
 clang -o my_app my_app.c \
     -I<repo>/include \
-    -L<repo>/target/release -lfgvad \
+    <repo>/target/release/libfgvad.a \
     -F<repo>/vendor/ten-vad/macOS -framework ten_vad \
     -Wl,-rpath,<repo>/vendor/ten-vad/macOS
 ```
