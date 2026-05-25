@@ -218,10 +218,10 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [ ] energy gate 前置过滤（噪声鲁棒性）
 - [x] iOS 库构建支持（device + simulator）
 - [x] iOS Demo（最小录音 + VAD）
-- [ ] iOS XCFramework 打包脚本（用于对外分发）
+- [x] iOS XCFramework 打包脚本（`scripts/build-xcframework.sh`，含 macOS 三 slice）
 - [x] Android 构建支持（NDK + JNI bridge）
 - [x] Android Demo（含按句试听 + 测试 WAV 重跑）
-- [ ] CocoaPods / SPM 分发
+- [x] CocoaPods / SPM 分发 —— v0.1.0 起，详见 [Installation](#installation)
 - [x] 纯 C CLI 集成示例 —— 见 [`examples/c/`](./examples/c/)（macOS 已支持；Linux/embedded 待后续）
 
 ## Installation
