@@ -103,10 +103,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    enum FgVadState final_state = fgvad_state(vad);
-    enum FgVadEndReason final_reason = fgvad_end_reason(vad);
     fgvad_results_free(results);
     fgvad_stop(vad);
+    enum FgVadState final_state = fgvad_state(vad);
+    enum FgVadEndReason final_reason = fgvad_end_reason(vad);
     fgvad_free(vad);
     free(samples);
 
