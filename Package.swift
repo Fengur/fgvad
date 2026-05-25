@@ -1,5 +1,30 @@
 // swift-tools-version: 5.9
 import PackageDescription
+import Foundation
+
+// 开发期 export FGVAD_LOCAL_BINARIES=1 让 Package.swift 用 dist/ 本地 xcframework,
+// 改 wrapper 后无需重新打 release zip;
+// 集成方默认走 GitHub Release URL + checksum,不需要本地构建。
+let useLocalBinaries = ProcessInfo.processInfo.environment["FGVAD_LOCAL_BINARIES"] != nil
+
+let releaseTag = "v0.1.0"
+let releaseBase = "https://github.com/Fengur/fgvad/releases/download/\(releaseTag)"
+
+let fgvadCoreTarget: Target = useLocalBinaries
+    ? .binaryTarget(name: "FgvadCore", path: "dist/FgvadCore.xcframework")
+    : .binaryTarget(
+        name: "FgvadCore",
+        url: "\(releaseBase)/FgvadCore.xcframework.zip",
+        checksum: "66cc3faa07ec6a66f8e24178c709566b4e8dedccf9263959b5e3f3d20f1b35c5"
+      )
+
+let tenVadTarget: Target = useLocalBinaries
+    ? .binaryTarget(name: "TenVad", path: "dist/TenVad.xcframework")
+    : .binaryTarget(
+        name: "TenVad",
+        url: "\(releaseBase)/TenVad.xcframework.zip",
+        checksum: "00cc476d582632c060b830970a73c7e53fbbbf81600826784b933cf99757dbf9"
+      )
 
 let package = Package(
     name: "Fgvad",
@@ -11,17 +36,8 @@ let package = Package(
         .library(name: "Fgvad", targets: ["Fgvad"]),
     ],
     targets: [
-        // C ABI(staticlib)+ headers + module.modulemap，从 dist/ 引用本地 XCFramework。
-        // Plan 2 切到 GitHub Release URL + checksum。
-        .binaryTarget(
-            name: "FgvadCore",
-            path: "dist/FgvadCore.xcframework"
-        ),
-        .binaryTarget(
-            name: "TenVad",
-            path: "dist/TenVad.xcframework"
-        ),
-        // Swift wrapper，依赖 FgvadCore(C)+ TenVad(链接需要)。
+        fgvadCoreTarget,
+        tenVadTarget,
         .target(
             name: "Fgvad",
             dependencies: ["FgvadCore", "TenVad"],
