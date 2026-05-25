@@ -46,6 +46,12 @@ Pod::Spec.new do |s|
     'OTHER_LDFLAGS' => '$(inherited) -framework ten_vad'
   }
 
+  # Consumer App target 也需要排除 x86_64 simulator,以便 CocoaPods lint
+  # 生成的 App target 与 arm64-only Fgvad.framework 架构匹配。
+  s.user_target_xcconfig = {
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'x86_64'
+  }
+
   # CocoaPods 不直接支持远程 XCFramework URL,用 prepare_command 在 pod install
   # 时下载 + 解压两个 xcframework 到 dist/。
   s.prepare_command = <<-CMD
