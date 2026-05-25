@@ -45,6 +45,23 @@ int main(int argc, char **argv) {
         return 2;
     }
 
+    /* dump_dir 可写性预检 (在读 WAV 之前 fail-fast) */
+    if (dump_dir) {
+        char probe_path[1024];
+        int n = snprintf(probe_path, sizeof(probe_path), "%s/.fgvad_probe", dump_dir);
+        if (n < 0 || n >= (int)sizeof(probe_path)) {
+            fprintf(stderr, "dump 路径过长: %s\n", dump_dir);
+            return 1;
+        }
+        FILE *probe = fopen(probe_path, "wb");
+        if (!probe) {
+            fprintf(stderr, "dump 目录不可写: %s (请先 mkdir -p)\n", dump_dir);
+            return 1;
+        }
+        fclose(probe);
+        remove(probe_path);
+    }
+
     /* 读 WAV */
     int16_t *samples = NULL;
     size_t sample_count = 0;
@@ -56,25 +73,6 @@ int main(int argc, char **argv) {
     }
     fprintf(stderr, "已读入 %zu 个采样点 (~%.2f 秒)\n",
             sample_count, (double)sample_count / 16000.0);
-
-    /* dump_dir 可写性预检 */
-    if (dump_dir) {
-        char probe_path[1024];
-        int n = snprintf(probe_path, sizeof(probe_path), "%s/.fgvad_probe", dump_dir);
-        if (n < 0 || n >= (int)sizeof(probe_path)) {
-            fprintf(stderr, "dump 路径过长: %s\n", dump_dir);
-            free(samples);
-            return 1;
-        }
-        FILE *probe = fopen(probe_path, "wb");
-        if (!probe) {
-            fprintf(stderr, "dump 目录不可写: %s (请先 mkdir -p)\n", dump_dir);
-            free(samples);
-            return 1;
-        }
-        fclose(probe);
-        remove(probe_path);
-    }
 
     /* 创建 VAD 实例 */
     struct FgVad *vad;
