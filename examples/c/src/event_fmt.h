@@ -8,6 +8,8 @@
 const char *fgvad_event_label(enum FgVadEvent e);
 const char *fgvad_state_label(enum FgVadState s);
 const char *fgvad_end_reason_label(enum FgVadEndReason r);
+/* fgvad_cli 当前未使用,保留以提供 4 个 enum 的对称 label API,
+ * 集成方做帧级统计或可视化时可用。 */
 const char *fgvad_result_type_label(enum FgVadResultType t);
 
 /**
