@@ -162,19 +162,19 @@ class MainActivity : AppCompatActivity() {
         sentenceAdapter.clear()
 
         vad = when (currentMode) {
-            Mode.SHORT -> FgVad.newShort(
-                shortHead.intValue(3000),
-                shortTail.intValue(2000),
-                shortMax.intValue(30_000),
-            )
-            Mode.LONG -> FgVad.newLong(
-                longHead.intValue(3000),
-                longMaxSent.intValue(30_000),
-                0,
-                longTailInit.intValue(2000),
-                longTailMin.intValue(600),
-                longDynamic,
-            )
+            Mode.SHORT -> FgVad.newShort(FgVad.ShortConfig(
+                headSilenceMs = shortHead.intValue(3000),
+                tailSilenceMs = shortTail.intValue(2000),
+                maxDurationMs = shortMax.intValue(30_000),
+            ))
+            Mode.LONG -> FgVad.newLong(FgVad.LongConfig(
+                headSilenceMs = longHead.intValue(3000),
+                maxSentenceMs = longMaxSent.intValue(30_000),
+                maxSessionMs = 0,
+                tailSilenceMsInitial = longTailInit.intValue(2000),
+                tailSilenceMsMin = longTailMin.intValue(600),
+                enableDynamicTail = longDynamic,
+            ))
         }
         vad!!.start()
 
@@ -279,13 +279,19 @@ class MainActivity : AppCompatActivity() {
         logger.i("App", "runAnalyze start: $label, ${pcm.size} samples")
 
         val v = when (currentMode) {
-            Mode.SHORT -> FgVad.newShort(
-                shortHead.intValue(3000), shortTail.intValue(2000), shortMax.intValue(30_000),
-            )
-            Mode.LONG -> FgVad.newLong(
-                longHead.intValue(3000), longMaxSent.intValue(30_000), 0,
-                longTailInit.intValue(2000), longTailMin.intValue(600), longDynamic,
-            )
+            Mode.SHORT -> FgVad.newShort(FgVad.ShortConfig(
+                headSilenceMs = shortHead.intValue(3000),
+                tailSilenceMs = shortTail.intValue(2000),
+                maxDurationMs = shortMax.intValue(30_000),
+            ))
+            Mode.LONG -> FgVad.newLong(FgVad.LongConfig(
+                headSilenceMs = longHead.intValue(3000),
+                maxSentenceMs = longMaxSent.intValue(30_000),
+                maxSessionMs = 0,
+                tailSilenceMsInitial = longTailInit.intValue(2000),
+                tailSilenceMsMin = longTailMin.intValue(600),
+                enableDynamicTail = longDynamic,
+            ))
         }
         v.start()
         Thread {

@@ -15,3 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "FgVadDemo"
 include(":app")
+include(":fgvad")
+project(":fgvad").projectDir = file("../../../android/fgvad")
