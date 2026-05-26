@@ -6,28 +6,44 @@ class FgVad private constructor(private var handle: Long) : AutoCloseable {
         require(handle != 0L) { "fgvad handle is null" }
     }
 
+    /** 短时模式:命令/查询语义,尾静音到点结束。与 iOS ShortConfig 对齐。 */
+    data class ShortConfig(
+        /** 开始录音后允许连续静音多久没说话就放弃。 */
+        val headSilenceMs: Int = 3_000,
+        /** 进入说话后,连续静音多久认为一句话说完。 */
+        val tailSilenceMs: Int = 2_000,
+        /** 单次会话最长时长上限(含静音),超时强制结束。 */
+        val maxDurationMs: Int = 30_000,
+    )
+
+    /** 长时模式:连续多句听写,外部不 stop 不结束。与 iOS LongConfig 对齐。 */
+    data class LongConfig(
+        val headSilenceMs: Int = 3_000,
+        val maxSentenceMs: Int = 30_000,
+        /** 0 表示不限会话总时长。 */
+        val maxSessionMs: Int = 0,
+        val tailSilenceMsInitial: Int = 2_000,
+        val tailSilenceMsMin: Int = 600,
+        val enableDynamicTail: Boolean = true,
+    )
+
     companion object {
         init {
             System.loadLibrary("fgvad_android")  // 触发依赖 libten_vad.so 也加载
         }
 
-        fun newShort(headSilenceMs: Int, tailSilenceMs: Int, maxDurationMs: Int): FgVad {
-            val h = nativeNewShort(headSilenceMs, tailSilenceMs, maxDurationMs)
+        /** 短时模式:推荐 API,传 [ShortConfig] data class。 */
+        fun newShort(config: ShortConfig = ShortConfig()): FgVad {
+            val h = nativeNewShort(config.headSilenceMs, config.tailSilenceMs, config.maxDurationMs)
             require(h != 0L) { "FgVad.newShort failed" }
             return FgVad(h)
         }
 
-        fun newLong(
-            headSilenceMs: Int,
-            maxSentenceMs: Int,
-            maxSessionMs: Int,
-            tailInitMs: Int,
-            tailMinMs: Int,
-            enableDynamicTail: Boolean,
-        ): FgVad {
+        /** 长时模式:推荐 API,传 [LongConfig] data class。 */
+        fun newLong(config: LongConfig = LongConfig()): FgVad {
             val h = nativeNewLong(
-                headSilenceMs, maxSentenceMs, maxSessionMs,
-                tailInitMs, tailMinMs, enableDynamicTail
+                config.headSilenceMs, config.maxSentenceMs, config.maxSessionMs,
+                config.tailSilenceMsInitial, config.tailSilenceMsMin, config.enableDynamicTail
             )
             require(h != 0L) { "FgVad.newLong failed" }
             return FgVad(h)
