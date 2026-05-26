@@ -1,4 +1,5 @@
 # fgvad
+> [English](README.en.md) | 中文
 
 智能 VAD 库——在 [ten-vad](https://github.com/TEN-framework/ten-vad) 神经网络
 VAD 之上封装状态机和**动态端点策略**，让"短时命令"和"长时听写"两种使用

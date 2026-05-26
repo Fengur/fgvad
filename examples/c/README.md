@@ -1,4 +1,5 @@
 # fgvad C Demo
+> [English](README.en.md) | 中文
 
 纯 C99 + CMake 的命令行工具,演示 fgvad 在不依赖任何 GUI/平台 SDK 的环境下
 怎么集成。云端服务、Linux 后台任务、嵌入式集成方可参考本目录的链接方式。

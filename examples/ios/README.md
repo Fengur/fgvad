@@ -1,4 +1,5 @@
 # FgVadDemo —— fgvad 的 iOS 测试 / 接入样本
+> [English](README.en.md) | 中文
 
 UIKit + 纯 frame 布局,**复用 OC RemoteIO AudioUnit 录音器**(`FGAudioController` / `FGIOSRecorder`,跑在 RemoteIO AU 专用 NSThread + run loop 上,串行化 AU 操作)。Swift 业务层通过 `import Fgvad` 调用 wrapper。
 

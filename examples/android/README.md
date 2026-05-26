@@ -1,4 +1,5 @@
 # fgvad Android Demo
+> [English](README.en.md) | 中文
 
 复刻 iOS demo 的 Android 版本,Views(XML + Kotlin)+ AudioRecord 录音 + AudioTrack 试听。既是对外的使用示例,也是 Android 端调试 / 调参的工具。
 

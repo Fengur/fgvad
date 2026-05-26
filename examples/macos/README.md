@@ -1,4 +1,5 @@
 # FgVadDemo —— fgvad 的 macOS 测试工具
+> [English](README.en.md) | 中文
 
 AppKit + SnapKit。既是对外的使用示例，也是调试/调参的主力工具。
 
