@@ -222,6 +222,7 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [x] Android 构建支持（NDK + JNI bridge）
 - [x] Android Demo（含按句试听 + 测试 WAV 重跑）
 - [x] CocoaPods / SPM 分发 —— v0.1.0 起，详见 [Installation](#installation)
+- [x] Android 分发（JitPack） —— v0.2.0 起，详见 [Installation](#installation)
 - [x] 纯 C CLI 集成示例 —— 见 [`examples/c/`](./examples/c/)（macOS 已支持；Linux/embedded 待后续）
 
 ## Installation
@@ -257,6 +258,49 @@ pod 'Fgvad', :git => 'https://github.com/Fengur/fgvad.git', :tag => 'v0.1.0'
 ```
 
 `pod install` 时会自动下载 GitHub Release 上的 XCFramework zip 并解压。**macOS 不走 Pod**，请用 SPM 接入（同一个库，同一个 API）。
+
+### Android（JitPack）
+
+支持 **Android API 26+ / arm64-v8a**。集成方在 `settings.gradle.kts` 加 JitPack maven 仓库:
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+```
+
+`app/build.gradle.kts` 加依赖:
+
+```kotlin
+dependencies {
+    implementation("com.github.Fengur:fgvad:v0.2.0")
+}
+```
+
+Kotlin 调用示例:
+
+```kotlin
+import io.fengur.fgvad.FgVad
+
+val vad = FgVad.newShort(FgVad.ShortConfig(
+    headSilenceMs = 3000,
+    tailSilenceMs = 2000,
+    maxDurationMs = 30000,
+))
+vad.start()
+val results = vad.process(samples)  // ShortArray (16kHz mono i16)
+for (r in results) {
+    if (r.event == Event.SentenceEnded) {
+        // r.audioSamples 是这一句的整段 PCM
+    }
+}
+vad.stop()
+vad.close()
+```
 
 ### 手动 XCFramework
 
