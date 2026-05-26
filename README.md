@@ -352,11 +352,37 @@ recorder.onStop = {
 }
 ```
 
-**短时 vs 长时的语义差**：
-- **短时**：一次 `start` 对应**一句话**，VAD 内部判停（state 转到 End）后外部可以收手
-- **长时**：一次 `start` 对应**多句连续听写**，state 不会自动到 End，要靠外部 `stop()` 终止
+### 事件 → 业务动作映射
 
-批式（一次性喂全 PCM 不流式）也能用——见 `FgVadAnalyzer.analyze(samples:mode:)` 静态方法，常用于回放调参。
+同一个事件在两种模式下意义完全不同 —— 这是 fgvad 设计的核心。集成方按下表对接业务：
+
+| 事件 | 短时模式 | 长时模式 |
+|---|---|---|
+| `SentenceStarted` | 启动 ASR 识别（发首包） | 启动新一轮 ASR 识别（多句连续，每句一轮） |
+| `SentenceEnded` | **关闭录音** + 发尾包等识别结果 | 发尾包,**继续录音**等下一句 |
+| `SentenceForceCut` | **关闭录音** + 发尾包（单句到 max 强切） | 发尾包,**继续录音**（用户讲太长被切） |
+| `HeadSilenceTimeout` | **关闭录音** —— 用户按了录音但没开口,放弃 | **提示用户**"您已经 N 秒没说话了",**不停录音** |
+| `MaxDurationReached` | **关闭录音** —— 单次会话总时长上限 | **关闭整个会话** —— 会话总时长上限 |
+
+**核心差异 —— `HeadSilenceTimeout` 在两种模式下天差地别**：
+- 短时下是 **控制信号**：state 直接转 End，会话终止 → 你应当关录音
+- 长时下是 **通知事件**：state 不变，会话继续 → 你应当 prompt 用户但**不动录音**
+
+短时模式所有终止路径都汇聚到一个观测点：`analyzer.state == FgVadState_End`。判断该不该关录音直接看这个 state，不需要按事件分支。
+
+长时模式的终止只有两条：外部 `stop()`（用户主动停）或 `MaxDurationReached`（会话总时长到）。`HeadSilenceTimeout` 永远只是通知。
+
+### 批式回放
+
+不流式跑也行 —— 调参 / 回归测试常用：
+
+```swift
+let (results, finalState, endReason) = try FgVadAnalyzer.analyze(
+    samples: pcm, mode: .short(.init())
+)
+```
+
+整段 PCM 喂进去，吐所有 results + 最终 state + endReason。
 
 ## License
 
