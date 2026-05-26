@@ -361,23 +361,33 @@ analyzer.start()
 recorder.onChunk = { chunk in
     let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
     for r in results {
-        switch r.event {
-        case FgVadEvent_SentenceStarted:
-            // 一句话开始 —— 集成 ASR 时,这里启动一轮新识别会话(发首包)
-            break
-        case FgVadEvent_SentenceEnded, FgVadEvent_SentenceForceCut:
-            // 一句话完整结束 —— r.audioLen 个采样是这句完整 PCM
-            // 集成 ASR 时,这里发尾包并等识别结果
-            break
-        default:
-            // FgVadEvent_None_：本 chunk 无端点变化（继续累积）
-            // FgVadEvent_HeadSilenceTimeout：长时下是通知（短时是控制）
-            // FgVadEvent_MaxDurationReached：到上限强切
-            break
+        // —— 首包:SentenceStart 事件
+        if r.event == FgVadEvent_SentenceStarted {
+            // 集成 ASR 时,这里启动一轮新识别会话(发首包)
+        }
+
+        // —— 尾包:统一按 r.type == SentenceEnd 判断
+        //    覆盖三种情况:
+        //    a) SentenceEnded     —— 自然结束(尾静音达标)
+        //    b) SentenceForceCut  —— 单句强切(讲太长撞 max_sentence)
+        //    c) MaxDurationReached / ExternalStop 触发时还在说话——
+        //       库会把当前 Active 段当"人造尾包"吐出来,event 字段是
+        //       MaxDurationReached/None,但 r.type = SentenceEnd
+        if r.type == FgVadResultType_SentenceEnd {
+            // 集成 ASR:发尾包并等识别结果
+            // r.audioLen 个采样是这句完整 PCM
+            // r.event 区分原因(SentenceEnded / SentenceForceCut /
+            //   MaxDurationReached),用于 UX 提示("被强切了"等)
+        }
+
+        // —— 通知:HeadSilenceTimeout 在长时下是 prompt
+        if r.event == FgVadEvent_HeadSilenceTimeout {
+            // 长时:prompt 用户"您 N 秒没说话了",不停录音
+            // 短时:state 已转 End,会在下面统一收尾
         }
     }
 
-    // 短时模式自然终止：state == End 表示一句话讲完了
+    // 短时模式自然终止:state == End 时关录音
     if analyzer.state == FgVadState_End {
         analyzer.stop()
         recorder.stop()
@@ -402,6 +412,8 @@ recorder.onStop = {
 | `SentenceForceCut` | **关闭录音** + 发尾包（单句到 max 强切） | 发尾包,**继续录音**（用户讲太长被切） |
 | `HeadSilenceTimeout` | **关闭录音** —— 用户按了录音但没开口,放弃 | **提示用户**"您已经 N 秒没说话了",**不停录音** |
 | `MaxDurationReached` | **关闭录音** —— 单次会话总时长上限 | **关闭整个会话** —— 会话总时长上限 |
+
+**判尾包看 `r.type` 不要看 `r.event`**：库把所有"尾包语义"——SentenceEnded（自然）/ SentenceForceCut（单句强切）/ MaxDurationReached + ExternalStop 触发时还在说话的"人造尾包"——统一打到 `r.type == SentenceEnd`。`r.event` 只用来细分**原因**（要不要给用户 UX 提示"被强切了"）。
 
 **核心差异 —— `HeadSilenceTimeout` 在两种模式下天差地别**：
 - 短时下是 **控制信号**：state 直接转 End，会话终止 → 你应当关录音
