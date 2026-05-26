@@ -63,11 +63,29 @@ Swift 通过 FgVadDemo-Bridging-Header.h 导入 fgvad.h (include/)
   "达到最大时长上限"、"手动停止"
 - **调试日志**：`~/Library/Logs/FgVadDemo/run.log`（每次启动 truncate）
 
+## Demo 接入 fgvad 的方式（dev 工作流）
+
+Demo 通过 **Swift Package Manager `path:` 模式**消费仓库内 fgvad，**不走公开 GitHub Release URL**：
+
+```yaml
+# project.yml
+packages:
+  SnapKit: { url: ..., from: "5.7.0" }
+  Fgvad:
+    path: ../..  # 仓库根，Package.swift 在那里
+
+targets:
+  FgVadDemo:
+    dependencies:
+      - package: SnapKit
+      - package: Fgvad
+        product: Fgvad
+```
+
+dev 期改 Swift wrapper（`Sources/Fgvad/FgVadAnalyzer.swift`）立即在 demo build 看到。改 Rust 代码（`src/`）需要重跑 `./scripts/build-xcframework.sh` 重生成 `dist/*.xcframework`，demo 才能看到。
+
+`Package.swift` 双模式：默认走 GitHub Release URL（带 SHA256 checksum）；本地加速调试可 `export FGVAD_LOCAL_BINARIES=1` 走 dist/ 本地。
+
 ## 待补充
 
 - 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（路线图，可选 polish）
-
----
-
-> 具体设计参见 [`memory/project_fgvad_demo_design.md`](../../../.claude/...) 笔记
-> （用户本地 memory）。

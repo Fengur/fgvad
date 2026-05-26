@@ -194,23 +194,19 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 | `RESUME_CONFIRM_FRAMES` | 5 帧 (80ms) | 尾端点防抖。**fgvad 原创**——业界 VAD 库做 segmentation 不需要，但 endpointing（tail 1-2s 的语义级判停）必须有 |
 | `PRE_ROLL_FRAMES` | 16 帧 (256ms) | SentenceStart 往前带 250ms 音频，给下游识别器留足上下文 |
 
-## 当前状态与限制
+## 当前状态
 
-- **macOS universal（arm64 + x86_64）**：✅ 已支持。`scripts/build-macos-universal.sh`
-  双架构 lipo，单产物兼容 Apple Silicon 和 Intel Mac。Demo bundle 嵌入的 fgvad
-  已是 universal
-- **iOS（device + simulator）**：✅ 库构建链路 + Demo 都已通。`scripts/build-ios.sh`
-  同时产出 `aarch64-apple-ios`（device）和 `aarch64-apple-ios-sim`（simulator）
-  两份产物，链接对应平台的 ten_vad.framework。`examples/ios/FgVadDemo/` 是
-  最小录音 demo，UIKit + 复用 OC RemoteIO AU 录音器，已验证在 iPhone 17 Pro
-  Simulator 跑得起来。**XCFramework 打包脚本待补**
-- **Android（arm64-v8a）**：✅ 已支持。`scripts/build-android.sh` 交叉编译 + JNI bridge，
-  min SDK 26。`examples/android/FgVadDemo/` 功能对齐 iOS Demo（录音、加载 WAV 重跑、
-  按句试听、日志写文件）。详见 [`examples/android/README.md`](./examples/android/README.md)
-- **Linux / Windows / WASM**：暂不计划
-- **输入**：仅 16 kHz / 单声道 / i16 PCM
-- **噪声**：当前对办公室级别（−50 dBFS）背景噪声够用；餐厅/车载/户外场景
-  下推荐补一层 energy gate 前置（路线图）
+| 平台 | Demo | 库构建脚本 | 公开分发(集成方接入) |
+|---|---|---|---|
+| **macOS 13+**(arm64 + x86_64 universal) | ✅ AppKit Demo([macOS README](./examples/macos/README.md)) | `build-macos-universal.sh` | SPM URL([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0))+ 手动 XCFramework |
+| **iOS 16+**(device + simulator) | ✅ UIKit Demo([iOS README](./examples/ios/README.md))真机 24 分钟连续录音验过 | `build-ios.sh`(device + sim 双 slice) | SPM URL + CocoaPods([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0))+ 手动 XCFramework |
+| **Android API 26+**(arm64-v8a) | ✅ Views Demo([Android README](./examples/android/README.md)) | `build-android.sh`(NDK + JNI) | JitPack([v0.2.0+](https://jitpack.io/#Fengur/fgvad)) |
+| **C/C++**(macOS) | ✅ CMake CLI Demo([C README](./examples/c/README.md)) | `cargo build` + `xcodebuild -create-xcframework` | 仓库内 `examples/c/` 参考接入 |
+| Linux / Windows / WASM | — | — | 暂不计划 |
+
+**输入约束**:仅 16 kHz / 单声道 / i16 PCM
+**噪声**:办公室级别(−50 dBFS)够用;餐厅/车载/户外推荐补一层 energy gate 前置(路线图)
+**v0.1.0** 发布 SPM + Pod + 手动 XCFramework 三种 iOS/macOS 接入;**v0.2.0** 加入 Android 通过 JitPack 一行接入。详见 [Installation](#installation)。
 
 ## 路线图
 
