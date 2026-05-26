@@ -308,21 +308,55 @@ vad.close()
 
 ### 接入示例
 
+fgvad 是流式 API，调用三段对齐 ASR 客户端的 begin / 中间包 / 尾包心智：
+
 ```swift
 import Fgvad
 
+// 1. begin —— 启动一次 VAD 会话
 let analyzer = try FgVadAnalyzer(mode: .short(.init()))
 analyzer.start()
 
-// PCM 来源由你决定 —— 录音 / 文件 / 网络流都行，16kHz mono i16
-let results = try samples.withUnsafeBufferPointer { try analyzer.feed($0) }
-for r in results {
-    if r.event == FgVadEvent_SentenceEnded {
-        // 拿到一句完整音频：r.audioLen 个采样
+// 2. 中间包 —— 录音回调里持续喂 chunk
+//    chunk 大小没限制（典型 20-100ms = 320~1600 samples @ 16kHz）
+recorder.onChunk = { chunk in
+    let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
+    for r in results {
+        switch r.event {
+        case FgVadEvent_SentenceStarted:
+            // 一句话开始 —— 集成 ASR 时,这里启动一轮新识别会话(发首包)
+            break
+        case FgVadEvent_SentenceEnded, FgVadEvent_SentenceForceCut:
+            // 一句话完整结束 —— r.audioLen 个采样是这句完整 PCM
+            // 集成 ASR 时,这里发尾包并等识别结果
+            break
+        default:
+            // FgVadEvent_None_：本 chunk 无端点变化（继续累积）
+            // FgVadEvent_HeadSilenceTimeout：长时下是通知（短时是控制）
+            // FgVadEvent_MaxDurationReached：到上限强切
+            break
+        }
+    }
+
+    // 短时模式自然终止：state == End 表示一句话讲完了
+    if analyzer.state == FgVadState_End {
+        analyzer.stop()
+        recorder.stop()
     }
 }
-analyzer.stop()
+
+// 3. end —— 长时模式典型路径：用户主动停录音
+//    （短时在上面 state == End 时已自动 stop）
+recorder.onStop = {
+    analyzer.stop()
+}
 ```
+
+**短时 vs 长时的语义差**：
+- **短时**：一次 `start` 对应**一句话**，VAD 内部判停（state 转到 End）后外部可以收手
+- **长时**：一次 `start` 对应**多句连续听写**，state 不会自动到 End，要靠外部 `stop()` 终止
+
+批式（一次性喂全 PCM 不流式）也能用——见 `FgVadAnalyzer.analyze(samples:mode:)` 静态方法，常用于回放调参。
 
 ## License
 
