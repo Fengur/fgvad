@@ -50,15 +50,15 @@ else
   cargo build --target=aarch64-linux-android
 fi
 
-# 拷 .so 到 demo jniLibs
-DEMO_LIBS="$ROOT/examples/android/FgVadDemo/app/src/main/jniLibs/arm64-v8a"
-mkdir -p "$DEMO_LIBS"
-cp "$ROOT/examples/android/fgvad-jni/target/aarch64-linux-android/$PROFILE/libfgvad_android.so" "$DEMO_LIBS/"
-cp "$ROOT/vendor/ten-vad/Android/arm64-v8a/libten_vad.so" "$DEMO_LIBS/"
+# 拷 .so 到 android/fgvad library jniLibs(单点,demo 通过 Gradle project 依赖)
+LIB_LIBS="$ROOT/android/fgvad/src/main/jniLibs/arm64-v8a"
+mkdir -p "$LIB_LIBS"
+cp "$ROOT/examples/android/fgvad-jni/target/aarch64-linux-android/$PROFILE/libfgvad_android.so" "$LIB_LIBS/"
+cp "$ROOT/vendor/ten-vad/Android/arm64-v8a/libten_vad.so" "$LIB_LIBS/"
 
 echo
-echo "✓ Android .so 已就绪: $DEMO_LIBS"
-ls -la "$DEMO_LIBS"
+echo "✓ Android .so 已就绪: $LIB_LIBS"
+ls -la "$LIB_LIBS"
 echo
-echo "==> 链接信息（DT_NEEDED 应该看到 libten_vad.so）："
-"$TOOLCHAIN_BIN/llvm-readelf" -d "$DEMO_LIBS/libfgvad_android.so" | grep NEEDED || true
+echo "==> 链接信息(DT_NEEDED 应该看到 libten_vad.so):"
+"$TOOLCHAIN_BIN/llvm-readelf" -d "$LIB_LIBS/libfgvad_android.so" | grep NEEDED || true
