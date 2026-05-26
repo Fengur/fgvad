@@ -1,0 +1,11 @@
+# JitPack 远程构建配置 —— Android AAR 通过 android/ 子目录的 Gradle 项目产出。
+# 集成方写: implementation 'com.github.Fengur:fgvad:v0.2.0'
+
+jdk:
+  - openjdk17
+
+before_install:
+  - sdk install java 17.0.14-tem || true
+
+install:
+  - cd android && chmod +x gradlew && ./gradlew :fgvad:publishToMavenLocal -x test
