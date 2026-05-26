@@ -1,6 +1,7 @@
 plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
+    `maven-publish`
 }
 
 android {
@@ -26,6 +27,49 @@ android {
     sourceSets {
         getByName("main") {
             jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+}
+
+publishing {
+    publications {
+        register<MavenPublication>("release") {
+            groupId = "com.github.Fengur"
+            artifactId = "fgvad"
+            version = "0.2.0"
+
+            afterEvaluate {
+                from(components["release"])
+            }
+
+            pom {
+                name.set("fgvad")
+                description.set("智能 VAD 库 —— Rust 封装 ten-vad,带状态机和动态端点策略。")
+                url.set("https://github.com/Fengur/fgvad")
+                licenses {
+                    license {
+                        name.set("MIT")
+                        url.set("https://opensource.org/licenses/MIT")
+                    }
+                }
+                developers {
+                    developer {
+                        id.set("Fengur")
+                        name.set("Fengur")
+                    }
+                }
+                scm {
+                    connection.set("scm:git:https://github.com/Fengur/fgvad.git")
+                    developerConnection.set("scm:git:https://github.com/Fengur/fgvad.git")
+                    url.set("https://github.com/Fengur/fgvad")
+                }
+            }
         }
     }
 }
