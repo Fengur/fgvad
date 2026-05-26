@@ -347,59 +347,113 @@ vad.close()
 
 ### 接入示例
 
-fgvad 是流式 API，调用三段对齐 ASR 客户端的 begin / 中间包 / 尾包心智：
+fgvad 是流式 API，调用三段对齐 ASR 客户端的 **begin / 中间包 / 尾包** 心智。**短时和长时两种模式的事件处理逻辑不同，分别给完整示例**：
+
+#### 短时模式（命令 / 查询场景）
+
+一次 `start` 对应**一句话**。VAD 内部判停后 state 自动转 End，外部按 state 收尾即可。
 
 ```swift
 import Fgvad
 
-// 1. begin —— 启动一次 VAD 会话
-let analyzer = try FgVadAnalyzer(mode: .short(.init()))
+// 1. begin
+let analyzer = try FgVadAnalyzer(mode: .short(.init(
+    headSilenceTimeoutMs: 3_000,    // 没开口超时直接放弃
+    tailSilenceMs: 2_000,           // 尾静音 2s 就认为说完了
+    maxDurationMs: 30_000,          // 单次最多录 30s
+)))
 analyzer.start()
 
-// 2. 中间包 —— 录音回调里持续喂 chunk
-//    chunk 大小没限制（典型 20-100ms = 320~1600 samples @ 16kHz）
+// 2. 中间包 —— chunk 持续喂(典型 20-100ms / chunk)
 recorder.onChunk = { chunk in
     let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
     for r in results {
-        // —— 首包:SentenceStart 事件
         if r.event == FgVadEvent_SentenceStarted {
-            // 集成 ASR 时,这里启动一轮新识别会话(发首包)
+            // 启动 ASR 会话(发首包)
         }
-
-        // —— 尾包:统一按 r.type == SentenceEnd 判断
-        //    覆盖三种情况:
-        //    a) SentenceEnded     —— 自然结束(尾静音达标)
-        //    b) SentenceForceCut  —— 单句强切(讲太长撞 max_sentence)
-        //    c) MaxDurationReached / ExternalStop 触发时还在说话——
-        //       库会把当前 Active 段当"人造尾包"吐出来,event 字段是
-        //       MaxDurationReached/None,但 r.type = SentenceEnd
         if r.type == FgVadResultType_SentenceEnd {
-            // 集成 ASR:发尾包并等识别结果
+            // 发尾包 + 等识别结果
             // r.audioLen 个采样是这句完整 PCM
-            // r.event 区分原因(SentenceEnded / SentenceForceCut /
-            //   MaxDurationReached),用于 UX 提示("被强切了"等)
         }
-
-        // —— 通知:HeadSilenceTimeout 在长时下是 prompt
-        if r.event == FgVadEvent_HeadSilenceTimeout {
-            // 长时:prompt 用户"您 N 秒没说话了",不停录音
-            // 短时:state 已转 End,会在下面统一收尾
-        }
+        // 短时下其他事件(HeadSilenceTimeout / MaxDurationReached)
+        // 都是控制信号 —— 不用单独处理,下面 state == End 统一收尾
     }
 
-    // 短时模式自然终止:state == End 时关录音
+    // 3. end —— 短时所有终止路径汇聚到 state == End
     if analyzer.state == FgVadState_End {
         analyzer.stop()
         recorder.stop()
+
+        // analyzer.endReason 告诉你具体哪种终止:
+        //   .speechCompleted   —— 用户正常说完
+        //   .headSilenceTimeout —— 没开口就超时放弃
+        //   .maxDurationReached —— 撞 30s 上限被强停
+        //   .externalStop      —— 外部主动 stop()
     }
 }
+```
 
-// 3. end —— 长时模式典型路径：用户主动停录音
-//    （短时在上面 state == End 时已自动 stop）
+#### 长时模式（连续听写场景）
+
+一次 `start` 对应**多句连续**。state 不会自动转 End，只在外部 `stop()` 或 `max_session_duration` 终止。`HeadSilenceTimeout` 是 prompt 用户的通知，不结束会话。
+
+```swift
+import Fgvad
+
+// 1. begin
+let analyzer = try FgVadAnalyzer(mode: .long(.init(
+    headSilenceTimeoutMs: 3_000,         // 提示用户的间隔(周期性 prompt)
+    maxSentenceDurationMs: 30_000,       // 单句撞此值强切(吐 SentenceForceCut)
+    maxSessionDurationMs: 0,             // 0 = 整会话不限时长
+    tailSilenceMsInitial: 2_000,         // 动态尾端点初始值
+    tailSilenceMsMin: 600,               // 动态尾端点下限
+    enableDynamicTail: true,             // 启用动态曲线(关掉会让 87% 句子被强切)
+)))
+analyzer.start()
+
+// 2. 中间包
+recorder.onChunk = { chunk in
+    let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
+    for r in results {
+        if r.event == FgVadEvent_SentenceStarted {
+            // 启动新一轮 ASR 会话(每句一轮)
+        }
+        if r.type == FgVadResultType_SentenceEnd {
+            // 发尾包 + 等识别结果(继续等下一句)
+            // r.audioLen 是这句完整 PCM
+            // r.event == FgVadEvent_SentenceForceCut 时,UX 上提示"被强切"
+        }
+        if r.event == FgVadEvent_HeadSilenceTimeout {
+            // 长时的通知事件:周期性 prompt 用户
+            //   例如 UI 上显示"您已经 3 秒没说话了"
+            // 不要停录音,会话继续
+        }
+    }
+
+    // 长时不看 state == End —— 没人主动 stop 它永远不会到 End
+    // (除非显式设了 max_session_duration_ms 撞上限)
+}
+
+// 3. end —— 长时典型路径:用户主动停录音
 recorder.onStop = {
     analyzer.stop()
+    // stop() 时如果还在 Active 段,下一次 feed (空 chunk 也行) 会触发
+    // ExternalStop 路径吐"人造尾包"。如果 stop 后不再 feed,
+    // 那段 audio 就丢了 —— 推荐 stop 前最后喂一次空 chunk:
+    //
+    //   try [].withUnsafeBufferPointer { try analyzer.feed($0) }
+    //   analyzer.stop()
 }
 ```
+
+**关键区别**:
+
+| 关注点 | 短时 | 长时 |
+|---|---|---|
+| 终止判断 | `state == End`(所有终止都汇聚到这) | 外部 `stop()` / 撞 `max_session` |
+| `HeadSilenceTimeout` | 控制信号(state 自动转 End) | 通知事件(prompt 用户,不停) |
+| `SentenceEnd` 触发后 | 关录音(单句模式只有一句) | 继续录音等下一句 |
+| 典型时长 | 数秒~30s | 数分钟到不限 |
 
 ### 事件 → 业务动作映射
 
