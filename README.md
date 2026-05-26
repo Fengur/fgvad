@@ -259,6 +259,29 @@ OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
 - [x] CocoaPods / SPM 分发 —— v0.1.0 起，详见 [Installation](#installation)
 - [x] Android 分发（JitPack） —— v0.2.0 起，详见 [Installation](#installation)
 - [x] 纯 C CLI 集成示例 —— 见 [`examples/c/`](./examples/c/)（macOS 已支持；Linux/embedded 待后续）
+- [ ] 底层引擎深度调优 advanced API（按需暴露 ten-vad 内部参数 / 切换 VAD 引擎，详见下节）
+
+## 设计哲学与未来计划
+
+### 核心是思路，不是 ten-vad
+
+fgvad 想传达的是 **做 ASR-friendly VAD 的方法论**，不是"ten-vad 的 Swift / Kotlin 封装层"。三块核心能力其实跟底层引擎选型无关：
+
+- **动态尾端点曲线** —— `tail_ms(t) = max(initial × (1 − t/max), min)` 线性递减，"开头宽容、越说越紧"。任何能输出 voice / silence 帧概率的 VAD 都能套这条曲线
+- **状态机** —— Idle / Detecting / Started / Voiced / Trailing / End 六态 + 短/长时双语义，把"端点检测"分解成可观测的事件流
+- **通知 vs 控制事件** —— 同一个 endpoint 信号（`HeadSilenceTimeout` 等）在长时/短时下意义完全不同，API 设计上必须区分
+
+如果你选 [Silero VAD](https://github.com/snakers4/silero-vad) / [WebRTC VAD](https://github.com/wiseman/py-webrtcvad) / 自家训练的模型作为底层 voice/silence 帧分类器，把 fgvad 的状态机和动态曲线移植过去，**核心竞争力依然成立**。本仓库的 Rust 状态机（`src/state_machine.rs`）+ 测试集（49 个 cargo test）可以作为参考实现。
+
+ten-vad 是当前默认选择 —— 体积小（~5MB framework）、推理快、五语种通用，且有现成的 macOS / iOS / Android 预编译二进制可 vendor。但它不是这个项目的灵魂。
+
+### 底层引擎参数当前不暴露
+
+`FgVadAnalyzer` 公开的参数**全部是状态机层面的语义参数**（`headSilenceTimeoutMs` / `tailSilenceMsInitial` 等），不直接透传 ten-vad 内部的 threshold / frame size / 模型变体等实现细节。
+
+理由：让集成方专注于"端点策略"调参，不被底层引擎实现细节牵走。fgvad 内部的常量（[鲁棒性参数](#鲁棒性参数已对齐业界)章节列出的 THRESHOLD = 0.5、CONFIRM_FRAMES = 16 等）已经过对照实验收敛，办公室级别噪声场景默认值即可。
+
+未来如果出现"深度调优"需求 —— 比如极端噪声场景需要直接动底层 probability threshold，或者切换到不同 VAD 引擎变体 —— **会通过独立的 advanced API 暴露**（如 `FgVadAnalyzer.Advanced(...)` 或类似），不污染当前主 API。这条对应路线图里 "energy gate 前置过滤" 那项的下游设计空间。
 
 ## Installation
 
