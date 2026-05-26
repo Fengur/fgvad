@@ -11,6 +11,13 @@ examples/android/FgVadDemo/app/src/main/jniLibs/*/*.so
 examples/android/FgVadDemo/.gradle/
 examples/android/FgVadDemo/build/
 examples/android/FgVadDemo/app/build/
+# v0.2 fgvad library Gradle 项目的 build 产物
+android/.gradle/
+android/build/
+android/fgvad/build/
+android/.idea/
+android/.kotlin/
+android/local.properties
 examples/android/FgVadDemo/local.properties
 examples/android/FgVadDemo/.idea/
 examples/android/FgVadDemo/.kotlin/
