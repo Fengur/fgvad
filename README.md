@@ -482,13 +482,13 @@ recorder.onStop = {
 
 同一个事件在两种模式下意义完全不同 —— 这是 fgvad 设计的核心。集成方按下表对接业务：
 
-| 事件 | 短时模式 | 长时模式 |
+| 事件 | 短时模式（撞哪个参数） | 长时模式（撞哪个参数） |
 |---|---|---|
-| `SentenceStarted` | 启动 ASR 识别（发首包） | 启动新一轮 ASR 识别（多句连续，每句一轮） |
-| `SentenceEnded` | **关闭录音** + 发尾包等识别结果 | 发尾包,**继续录音**等下一句 |
-| `SentenceForceCut` | **关闭录音** + 发尾包（单句到 max 强切） | 发尾包,**继续录音**（用户讲太长被切） |
-| `HeadSilenceTimeout` | **关闭录音** —— 用户按了录音但没开口,放弃 | **提示用户**"您已经 N 秒没说话了",**不停录音** |
-| `MaxDurationReached` | **关闭录音** —— 单次会话总时长上限 | **关闭整个会话** —— 会话总时长上限 |
+| `SentenceStarted` | 启动 ASR 识别(发首包) | 启动新一轮 ASR 识别(多句连续,每句一轮) |
+| `SentenceEnded` | **关闭录音** + 发尾包 —— 撞 `tailSilenceMs`(默认 2000ms) | 发尾包,**继续录音**等下一句 —— 撞动态曲线(`tailSilenceMsInitial` 2000ms 收到 `tailSilenceMsMin` 600ms) |
+| `SentenceForceCut` | (短时不触发,短时只有一句) | 发尾包,**继续录音**(用户讲太长被切) —— 撞 `maxSentenceDurationMs`(默认 30000ms) |
+| `HeadSilenceTimeout` | **关闭录音** —— 用户没开口放弃 —— 撞 `headSilenceTimeoutMs`(默认 3000ms,触发即结束) | **提示用户**"您 N 秒没说话了",**不停录音** —— 每 `headSilenceTimeoutMs`(默认 3000ms)周期性提示 |
+| `MaxDurationReached` | **关闭录音** —— 撞 `maxDurationMs`(默认 30000ms) | **关闭整个会话** —— 撞 `maxSessionDurationMs`(**默认 0 = 不限,需显式设非零才触发**) |
 
 **判尾包看 `r.type` 不要看 `r.event`**：库把所有"尾包语义"——SentenceEnded（自然）/ SentenceForceCut（单句强切）/ MaxDurationReached + ExternalStop 触发时还在说话的"人造尾包"——统一打到 `r.type == SentenceEnd`。`r.event` 只用来细分**原因**（要不要给用户 UX 提示"被强切了"）。
 
