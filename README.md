@@ -54,9 +54,48 @@ xcodegen generate && xcodebuild -scheme FgVadDemo build
 
 ### 动态尾端点曲线（长时核心）
 
-随说话累积时长，尾静音阈值从 `tail_silence_initial`（如 2000ms）逐步收紧
-到 `tail_silence_min`（如 600ms）。**开始宽容、越说越紧**，兼顾"开头别切
-早"和"中段灵敏分句"。
+**公式**（线性递减 + clamp）：
+
+```
+tail_ms(t) = max( initial × (1 − t / max_sentence) , min )
+
+t = 当前句已累计毫秒数
+initial = tail_silence_initial（典型 2000ms）
+min = tail_silence_min（典型 600ms）
+max_sentence = max_sentence_duration_ms（典型 30000ms）
+```
+
+举例（initial=2000, min=600, max_sentence=30000）：
+
+```
+ tail_ms
+  2000 ┤●━━┓                  开头宽容（用户刚开口，停顿大概率是想词）
+       │   ┃
+       │    ╲
+       │     ╲
+  1000 ┤      ╲
+       │       ╲
+   600 ┤────────●━━━━━━━━━━━  撞下限后保持（已经讲了 21s+，
+       │                       灵敏分句优先）
+       └───────────────────── current_sentence_ms
+       0       15s   21s    30s
+                            (强切)
+```
+
+**为什么这条曲线是核心**：用恒等阈值（关掉动态曲线 = `tail_ms` 永远 = 2000ms）跑一席演讲实测，87% 的句子被 30s `max_sentence` 强切——平均句长贴上限分布，VAD 实际失效。开启动态曲线后强切占比降到 5.9%（85 句中 5 句强切），平均句长落在自然语义边界上。
+
+具体推导：人说话的"语义停顿"长度随句子时长缩短（开头犹豫思考几秒，讲到中段停顿往往 < 1s），固定 2000ms 在中段就太宽，必然撞 max；从 initial 线性收到 min 让阈值跟语义停顿一起变化。
+
+源码见 `src/state_machine.rs::current_tail_frames`。`enable_dynamic_tail = false` 时退化为恒等阈值（用于对照实验）。
+
+### `SentenceEnded` vs `SentenceForceCut` —— 两个独立事件
+
+| 事件 | 触发条件 | 业务含义 |
+|---|---|---|
+| `SentenceEnded` | 尾静音累计 ≥ `tail_ms(t)`（动态曲线当前阈值） | **自然结束**：用户说完了 |
+| `SentenceForceCut` | 单句长度 ≥ `max_sentence_duration_ms` | **强切**：用户讲太长被打断 |
+
+两个事件都带这一句的完整 PCM。设计意图是让消费方区分"用户表达完整"和"被库截断"——后者通常意味着句子语义被切坏，下游 ASR 拼接逻辑应特殊处理（比如把这句和下一句拼起来重识别）。
 
 ## 快速上手
 
