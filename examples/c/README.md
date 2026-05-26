@@ -1,60 +1,65 @@
 # fgvad C Demo
-> [English](README.en.md) | 中文
+> English | [中文](README_CN.md)
 
-纯 C99 + CMake 的命令行工具,演示 fgvad 在不依赖任何 GUI/平台 SDK 的环境下
-怎么集成。云端服务、Linux 后台任务、嵌入式集成方可参考本目录的链接方式。
+A pure C99 + CMake command-line tool demonstrating how to integrate fgvad
+without any GUI or platform SDK. Cloud services, Linux background tasks, and
+embedded integrators can use this directory as a linking reference.
 
-## 构建
+## Build
 
-只需要 macOS + CMake 3.18+ + Rust toolchain。
+Requires macOS + CMake 3.18+ + Rust toolchain only.
 
 ```bash
 cmake -B build
 cmake --build build
 ```
 
-CMake 会自动触发顶层 `cargo build --release`,产物 `libfgvad.dylib` 落在
-`<repo>/target/release/`。可执行文件落在 `examples/c/build/fgvad_cli`。
+CMake automatically triggers a top-level `cargo build --release`; the artifact
+`libfgvad.dylib` lands at `<repo>/target/release/`. The executable is at
+`examples/c/build/fgvad_cli`.
 
-## 运行
+## Run
 
 ```bash
-# 短时模式——命令/查询场景
+# Short Mode — command / query scenario
 ./build/fgvad_cli short ../../test-data/short/02-normal-utterance.wav
 
-# 长时模式——连续多句听写
+# Long Mode — continuous multi-sentence dictation
 ./build/fgvad_cli long ../../test-data/long/yixi-zhuzhiwei-typography.wav
 
-# 把每句切成独立 WAV
+# Slice each sentence into a separate WAV
 mkdir -p /tmp/fgvad-out
 ./build/fgvad_cli long input.wav -o /tmp/fgvad-out
 ```
 
-## 输出格式
+## Output Format
 
-事件流(stdout):
+Event stream (stdout):
 
 ```
 [mm:ss.mmm] EventName             state=...
 [mm:ss.mmm] SentenceEnded         duration=Nms  end_reason=...
 ```
 
-末尾一行 Summary 给出句数 / ForceCut 数 / 终态 / 结束原因。
+The final line is a Summary giving sentence count / ForceCut count / final state
+/ end reason.
 
-诊断信息("已读入 N 个采样点"等)走 stderr,可单独 `2>/dev/null` 静默。
+Diagnostic messages ("Read N samples", etc.) go to stderr and can be silenced
+with `2>/dev/null`.
 
-## 把 fgvad 集成到自己工程
+## Integrating fgvad Into Your Own Project
 
-最少需要:
+The minimum requirements are:
 
-1. `<repo>/include/fgvad.h` 加到 include path
-2. `libfgvad.dylib` 或 `libfgvad.a` 加到 link path
+1. Add `<repo>/include/fgvad.h` to your include path
+2. Add `libfgvad.dylib` or `libfgvad.a` to your link path
 
-### 用 dylib(推荐,零配置)
+### Using dylib (recommended, zero configuration)
 
-> 这里有两层 rpath:`my_app` 通过 `-Wl,-rpath` 找到 `libfgvad.dylib`;
-> `libfgvad.dylib` 内部已经有 rpath 指向 ten\_vad framework 目录(由 build.rs 编入)。
-> 所以集成方**不需要**额外给 my\_app 加 ten-vad 相关路径。
+> There are two rpath layers: `my_app` finds `libfgvad.dylib` via `-Wl,-rpath`;
+> `libfgvad.dylib` already has an rpath pointing to the ten\_vad framework
+> directory (embedded by `build.rs`). The integrator therefore does **not** need
+> to add any ten-vad related paths to `my_app`.
 
 ```bash
 clang -o my_app my_app.c \
@@ -64,12 +69,14 @@ clang -o my_app my_app.c \
     -Wl,-rpath,<repo>/target/release
 ```
 
-### 用 staticlib(自己处理 ten-vad)
+### Using staticlib (handle ten-vad yourself)
 
-`libfgvad.a` 不带链接信息,必须自己加 `-framework ten_vad`:
+`libfgvad.a` carries no link-path information; you must add `-framework ten_vad`
+yourself:
 
-> macOS clang 在 `-L` 路径下同时找到 `.dylib` 和 `.a` 时优先用 dylib。
-> 链 staticlib 必须显式给 `.a` 文件的绝对路径(或用 `-Wl,-search_paths_first` 等技巧)。
+> When both `.dylib` and `.a` exist under the `-L` path, macOS clang prefers the
+> dylib. To force the static lib, pass the `.a` file's absolute path explicitly
+> (or use `-Wl,-search_paths_first` etc.).
 
 ```bash
 clang -o my_app my_app.c \
@@ -79,24 +86,28 @@ clang -o my_app my_app.c \
     -Wl,-rpath,<repo>/vendor/ten-vad/macOS
 ```
 
-## 测试
+## Tests
 
 ```bash
 ctest --test-dir build -V
 ```
 
-跑 wav_io 模块的单元测试。
+Runs unit tests for the `wav_io` module.
 
-## IDE 支持
+## IDE Support
 
-`examples/c/.clangd` 指向 `build/compile_commands.json`,clangd 集成的 IDE
-(VS Code、Neovim、CLion)能自动解析 include path。第一次构建后红波浪自动消失。
+`examples/c/.clangd` points to `build/compile_commands.json`. IDEs with clangd
+integration (VS Code, Neovim, CLion) will resolve include paths automatically.
+Red squiggles disappear after the first build.
 
-## 边界
+## Limitations
 
-- 第一版仅 macOS。Linux 支持需要 vendor ten-vad Linux 预编译 +
-  `build.rs` 加 `link_linux()` 分支(在主项目 roadmap 里)。
-- WAV 解析仅接受 mono / 16kHz / i16,其他格式直接报错。
-- 流式 vs 批式:本 demo 一次性把整段 PCM 喂给 `fgvad_process` (简单直观)。
-  真实服务端流式接入时,每个网络帧到达后 chunk-by-chunk 调 `fgvad_process` 即可,
-  返回的 results 处理逻辑相同。
+- First version is macOS only. Linux support requires vendoring ten-vad Linux
+  pre-built binaries and adding a `link_linux()` branch to `build.rs` (tracked
+  in the main project roadmap).
+- WAV parsing only accepts mono / 16 kHz / i16; other formats are rejected
+  immediately with an error.
+- Streaming vs. batch: this demo feeds the entire PCM to `fgvad_process` in one
+  call (simple and clear). For a real server-side streaming integration, call
+  `fgvad_process` chunk-by-chunk as each network frame arrives; the returned
+  results are handled identically.

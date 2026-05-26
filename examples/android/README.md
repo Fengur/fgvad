@@ -1,33 +1,33 @@
 # fgvad Android Demo
-> [English](README.en.md) | 中文
+> English | [中文](README_CN.md)
 
-复刻 iOS demo 的 Android 版本,Views(XML + Kotlin)+ AudioRecord 录音 + AudioTrack 试听。既是对外的使用示例,也是 Android 端调试 / 调参的工具。
+The Android counterpart to the iOS demo — Views (XML + Kotlin) + AudioRecord for recording + AudioTrack for playback. Serves both as an external usage example and as an Android debugging / parameter-tuning tool.
 
-## 当前功能
+## Current Features
 
-- 短/长时模式切换 + 参数面板
-- 麦克风录音(AudioRecord)+ 实时事件流
-- 加载测试 WAV 重跑(assets 自带短 case + adb push 长 yixi)
-- Sentence list + 按句试听(AudioTrack 直播 i16 PCM)
-- 调试日志写文件:`/sdcard/Android/data/io.fengur.fgvaddemo/files/run.log`
-- 锁竖屏(调试工具不做横屏适配)
+- Short / Long Mode toggle + parameter panel
+- Microphone recording (AudioRecord) + real-time event stream
+- Load test WAV for replay (short cases bundled in assets + long yixi via adb push)
+- Sentence list + per-sentence playback (AudioTrack streams i16 PCM directly)
+- Debug log written to file: `/sdcard/Android/data/io.fengur.fgvaddemo/files/run.log`
+- Portrait-only (debugging tool, no landscape support)
 
-## 复现
+## Reproduce
 
 ```bash
 cd examples/android/FgVadDemo
-../../../scripts/build-android.sh           # 编 fgvad-jni 并把 .so 拷到 android/fgvad/jniLibs
+../../../scripts/build-android.sh           # build fgvad-jni and copy .so to android/fgvad/jniLibs
 adb push ../../../test-data/long/yixi-zhuzhiwei-typography.wav \
   /sdcard/Android/data/io.fengur.fgvaddemo/files/long/
 ./gradlew :app:installDebug
 adb shell am start -n io.fengur.fgvaddemo/.MainActivity
 ```
 
-启动后:长时模式 → 加载测试音频 → `[external] long/yixi-...` → 等解析完成。
+After launch: Long Mode → Load Test Audio → `[external] long/yixi-...` → wait for parsing to complete.
 
-## Demo 接入 fgvad 的方式(dev 工作流)
+## How the Demo Integrates fgvad (Dev Workflow)
 
-Demo 通过 **Gradle multi-project `project(":fgvad")` 跨目录依赖**消费仓库内 fgvad library,**不走公开 JitPack URL**:
+The Demo consumes fgvad via **Gradle multi-project `project(":fgvad")` cross-directory dependency** — it does **not** use the public JitPack URL:
 
 ```kotlin
 // examples/android/FgVadDemo/settings.gradle.kts
@@ -40,27 +40,27 @@ dependencies {
 }
 ```
 
-dev 期改 Kotlin wrapper(`android/fgvad/src/main/java/io/fengur/fgvad/*.kt`)立即在 demo build 看到。改 Rust 代码(`examples/android/fgvad-jni/src/lib.rs`)需要重跑 `./scripts/build-android.sh` 重生成 `.so` 到 `android/fgvad/src/main/jniLibs/`,demo 才能看到。
+During development, changes to the Kotlin wrapper (`android/fgvad/src/main/java/io/fengur/fgvad/*.kt`) are immediately visible on the next demo build. Changes to Rust code (`examples/android/fgvad-jni/src/lib.rs`) require re-running `./scripts/build-android.sh` to regenerate the `.so` files at `android/fgvad/src/main/jniLibs/` before the demo picks them up.
 
-集成方真要接入用的是 **JitPack URL 模式**(v0.2.0+):
+Integrators using **JitPack URL mode** (v0.2.0+):
 
 ```kotlin
-// 集成方 settings.gradle.kts
+// Integrator's settings.gradle.kts
 maven { url = uri("https://jitpack.io") }
-// 集成方 app/build.gradle.kts
+// Integrator's app/build.gradle.kts
 implementation("com.github.Fengur:fgvad:v0.2.0")
 ```
 
-详见根 [README Installation 章节](../../../README.md#installation)。
+See the root [README Installation section](../../../README.md#installation).
 
-## 已验证设备
+## Verified Devices
 
-- 小米 luming(25067PYE3C),Android 16,arm64-v8a
-- 长时模式 yixi baseline:N=85, ForceCut=5(与 iOS / macOS / C demo / cargo test 全平台一致)
+- Xiaomi Luming (25067PYE3C), Android 16, arm64-v8a
+- Long Mode yixi baseline: N=85, ForceCut=5 (consistent with iOS / macOS / C demo / cargo test across all platforms)
 
-## 限制
+## Limitations
 
-- 仅 arm64-v8a(armeabi-v7a 32-bit 在路线图,目前覆盖 95%+ 现代设备)
+- arm64-v8a only (armeabi-v7a 32-bit is on the roadmap; current coverage is 95%+ of modern devices)
 - min SDK 26
-- 录音用 AudioRecord(不用 Oboe)
-- 测试音频长 yixi(~47MB)不打进 APK,需 adb push
+- Recording uses AudioRecord (not Oboe)
+- Long yixi test audio (~47MB) is not bundled in the APK; must be pushed via adb

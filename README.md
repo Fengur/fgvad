@@ -1,135 +1,128 @@
 # fgvad
-> [English](README.en.md) | 中文
+> English | [中文](README_CN.md)
 
-智能 VAD 库——在 [ten-vad](https://github.com/TEN-framework/ten-vad) 神经网络
-VAD 之上封装状态机和**动态端点策略**，让"短时命令"和"长时听写"两种使用
-场景都有合理的语义切分。
+An intelligent VAD library — wraps a state machine and **dynamic endpoint strategy** on top of [ten-vad](https://github.com/TEN-framework/ten-vad) neural-network VAD, so both "short command" and "long dictation" use cases get sensible semantic segmentation.
 
-设计思路来源于作者过去做语音 SDK 的工作经验。
+The design draws on past speech SDK work experience.
 
-## 它解决什么
+## What It Solves
 
-ten-vad 本身只输出"这一帧是不是 voice"的概率，要做"切句"还需要一层端点
-策略。难点在于：
+ten-vad on its own only outputs per-frame voice probability. Turning that into "sentence segmentation" requires an endpoint strategy layer. The challenge:
 
-- **短时**（命令、查询）希望尾静音几秒就果断结束
-- **长时**（听写、连续口述）不能因为短停顿就切断，但又得在足够久的停顿处
-  准确分句
+- **Short mode** (commands, queries) — a few seconds of tail silence should confidently end the session
+- **Long mode** (dictation, continuous narration) — must not cut on brief pauses, but must segment accurately at sufficiently long pauses
 
-fgvad 用一条**动态尾端点曲线**统一处理这两种场景。在朱志偉一席演讲
-25:30 长时模式实测：
+fgvad handles both scenarios with a single **Dynamic Tail Endpoint Curve**. Real-world test on the Yixi talk by Zhu Zhiwei (25:30, long mode):
 
-| 配置 | 句数 | ForceCut | ForceCut 占比 |
+| Config | Sentences | ForceCut | ForceCut ratio |
 |---|---|---|---|
-| 启用动态曲线 | 85 | 5 | 5.9% |
-| 关闭（恒等 `tail_silence_initial=2000ms`） | 53 | 46 | **87%** |
+| Dynamic curve enabled | 85 | 5 | 5.9% |
+| Disabled (constant `tail_silence_initial=2000ms`) | 53 | 46 | **87%** |
 
-关闭动态曲线时，VAD 几乎只能靠 30s 强切来分句，平均句长贴着上限分布
-——**连续语音场景下基本不可用**。这条曲线是 fgvad 的核心竞争力。
+With the dynamic curve off, VAD can only segment via the 30s force-cut — average sentence length clusters at the ceiling, making it **essentially unusable for continuous speech**. This curve is fgvad's core value.
 
-复现方法：
+To reproduce:
 
 ```bash
 cd examples/macos
 xcodegen generate && xcodebuild -scheme FgVadDemo build
-# Demo 启动后，长时模式 → 加载 WAV 重跑 → 选 test-data/long/yixi-zhuzhiwei-typography.wav
-# 切换"启用动态尾端点曲线"对比两次结果
+# After launching the Demo: Long Mode → Load WAV → select test-data/long/yixi-zhuzhiwei-typography.wav
+# Toggle "Enable Dynamic Tail Endpoint Curve" to compare both results
 ```
 
-## 核心概念
+## Core Concepts
 
-### 短时模式（命令/查询）
+### Short Mode (Commands / Queries)
 
-- 一次 `start` → 单段语义 → 尾静音达标即结束整个会话
-- `head_silence_timeout` 是 **控制信号**——不开口直接结束（`HeadSilenceTimeout`）
-- `tail_silence` 是固定阈值（典型 2000ms）
-- `max_duration` 是会话总长上限（典型 30000ms），到点强切（`MaxDurationReached`）
+- One `start` → single semantic segment → session ends when tail silence threshold is met
+- `head_silence_timeout` is a **control signal** — silence at the beginning ends the session immediately (`HeadSilenceTimeout`)
+- `tail_silence` is a fixed threshold (typical: 2000ms)
+- `max_duration` is the session total length cap (typical: 30000ms); triggers a force cut when reached (`MaxDurationReached`)
 
-### 长时模式（听写/连续口述）
+### Long Mode (Dictation / Continuous Narration)
 
-- 一次 `start` → 多段连续切分 → 不结束直到外部 `stop()` 或 `max_session_duration`
-- `head_silence_timeout` 只是 **通知事件**——周期性提示 consumer，会话不结束
-- `max_sentence_duration` 是 **单句** 上限——撞到则切出一句（`SentenceForceCut`），
-  会话继续
-- 尾静音阈值是动态曲线（见下）
+- One `start` → multiple continuous segments → session does not end until external `stop()` or `max_session_duration`
+- `head_silence_timeout` is a **notification event** — periodically prompts the consumer; session does not end
+- `max_sentence_duration` is the **per-sentence** cap — triggers `SentenceForceCut` and the session continues
+- Tail silence threshold is a dynamic curve (see below)
 
-### 动态尾端点曲线（长时核心）
+### Dynamic Tail Endpoint Curve (Long Mode Core)
 
-**公式**（线性递减 + clamp）：
+**Formula** (linear decay + clamp):
 
 ```
 tail_ms(t) = max( initial × (1 − t / max_sentence) , min )
 
-t = 当前句已累计毫秒数
-initial = tail_silence_initial（典型 2000ms）
-min = tail_silence_min（典型 600ms）
-max_sentence = max_sentence_duration_ms（典型 30000ms）
+t = elapsed milliseconds in the current sentence
+initial = tail_silence_initial (typical: 2000ms)
+min = tail_silence_min (typical: 600ms)
+max_sentence = max_sentence_duration_ms (typical: 30000ms)
 ```
 
-举例（initial=2000, min=600, max_sentence=30000）：
+Example (initial=2000, min=600, max_sentence=30000):
 
 ```
  tail_ms
-  2000 ┤●━━┓                  开头宽容（用户刚开口，停顿大概率是想词）
+  2000 ┤●━━┓                  Generous at the start (user just began speaking, pauses likely mean searching for words)
        │   ┃
        │    ╲
        │     ╲
   1000 ┤      ╲
        │       ╲
-   600 ┤────────●━━━━━━━━━━━  撞下限后保持（已经讲了 21s+，
-       │                       灵敏分句优先）
+   600 ┤────────●━━━━━━━━━━━  Holds at floor (21s+ elapsed,
+       │                       sensitive segmentation takes priority)
        └───────────────────── current_sentence_ms
        0       15s   21s    30s
-                            (强切)
+                            (force cut)
 ```
 
-**为什么这条曲线是核心**：用恒等阈值（关掉动态曲线 = `tail_ms` 永远 = 2000ms）跑一席演讲实测，87% 的句子被 30s `max_sentence` 强切——平均句长贴上限分布，VAD 实际失效。开启动态曲线后强切占比降到 5.9%（85 句中 5 句强切），平均句长落在自然语义边界上。
+**Why this curve is the core**: running the Yixi talk with a constant threshold (dynamic curve off = `tail_ms` always 2000ms), 87% of sentences are force-cut by the 30s `max_sentence` — average sentence length clusters at the ceiling and VAD effectively fails. With the dynamic curve, the force-cut ratio drops to 5.9% (5 out of 85 sentences), and average sentence length lands at natural semantic boundaries.
 
-具体推导：人说话的"语义停顿"长度随句子时长缩短（开头犹豫思考几秒，讲到中段停顿往往 < 1s），固定 2000ms 在中段就太宽，必然撞 max；从 initial 线性收到 min 让阈值跟语义停顿一起变化。
+Reasoning: the "semantic pause" length in human speech shrinks as sentence length grows (early hesitation can be several seconds; mid-sentence pauses are often < 1s). A fixed 2000ms is too generous in the middle of a sentence and inevitably hits max; linearly decaying from `initial` to `min` keeps the threshold in sync with semantic pauses.
 
-源码见 `src/state_machine.rs::current_tail_frames`。`enable_dynamic_tail = false` 时退化为恒等阈值（用于对照实验）。
+Source: `src/state_machine.rs::current_tail_frames`. With `enable_dynamic_tail = false` it degrades to a constant threshold (for controlled experiments).
 
-### `SentenceEnded` vs `SentenceForceCut` —— 两个独立事件
+### `SentenceEnded` vs `SentenceForceCut` — Two Independent Events
 
-| 事件 | 触发条件 | 业务含义 |
+| Event | Trigger | Business meaning |
 |---|---|---|
-| `SentenceEnded` | 尾静音累计 ≥ `tail_ms(t)`（动态曲线当前阈值） | **自然结束**：用户说完了 |
-| `SentenceForceCut` | 单句长度 ≥ `max_sentence_duration_ms` | **强切**：用户讲太长被打断 |
+| `SentenceEnded` | Tail silence accumulated ≥ `tail_ms(t)` (dynamic curve current threshold) | **Natural end**: user finished speaking |
+| `SentenceForceCut` | Sentence length ≥ `max_sentence_duration_ms` | **Force cut**: user spoke too long and was interrupted |
 
-两个事件都带这一句的完整 PCM。设计意图是让消费方区分"用户表达完整"和"被库截断"——后者通常意味着句子语义被切坏，下游 ASR 拼接逻辑应特殊处理（比如把这句和下一句拼起来重识别）。
+Both events carry the full PCM of that sentence. The intent is to let the consumer distinguish "user expressed completely" from "cut by the library" — the latter usually means the sentence was semantically broken, and downstream ASR stitching logic should handle it specially (e.g., concatenate this sentence with the next one for re-recognition).
 
-## 快速上手
+## Quick Start
 
-### 构建
+### Build
 
 ```bash
-# macOS：当前主机架构构建（Apple Silicon → arm64；Intel Mac → x86_64）
+# macOS: build for current host architecture (Apple Silicon → arm64; Intel Mac → x86_64)
 cargo build
 
-# macOS universal binary（arm64 + x86_64 lipo）
+# macOS universal binary (arm64 + x86_64 lipo)
 ./scripts/build-macos-universal.sh             # debug
 ./scripts/build-macos-universal.sh --release   # release
 
-# iOS（device + simulator 各编一份）
+# iOS (device + simulator, separate slices)
 ./scripts/build-ios.sh                         # debug
 ./scripts/build-ios.sh --release               # release
 
-cargo test                                     # 端到端集成测试（macOS only）
+cargo test                                     # end-to-end integration tests (macOS only)
 ```
 
-构建产物：
+Build artifacts:
 
-- `target/<host>/debug/libfgvad.dylib` —— 单架构（默认 cargo build）
-- `target/universal-apple-darwin/debug/libfgvad.{dylib,a}` —— 双架构 universal（脚本产物）
-- `target/aarch64-apple-ios/debug/libfgvad.{dylib,a}` —— iOS device
-- `target/aarch64-apple-ios-sim/debug/libfgvad.{dylib,a}` —— iOS Simulator
-- `include/fgvad.h`（cbindgen 自动生成）
-- 内嵌的 ten-vad framework：
-  - `vendor/ten-vad/macOS/ten_vad.framework`（universal）
-  - `vendor/ten-vad/iOS/device/ten_vad.framework`（arm64 device）
-  - `vendor/ten-vad/iOS/simulator/ten_vad.framework`（arm64 simulator，vtool 重打 platform 标记，详见 vendor 内 README）
+- `target/<host>/debug/libfgvad.dylib` — single-arch (default `cargo build`)
+- `target/universal-apple-darwin/debug/libfgvad.{dylib,a}` — dual-arch universal (script output)
+- `target/aarch64-apple-ios/debug/libfgvad.{dylib,a}` — iOS device
+- `target/aarch64-apple-ios-sim/debug/libfgvad.{dylib,a}` — iOS Simulator
+- `include/fgvad.h` (auto-generated by cbindgen)
+- Bundled ten-vad frameworks:
+  - `vendor/ten-vad/macOS/ten_vad.framework` (universal)
+  - `vendor/ten-vad/iOS/device/ten_vad.framework` (arm64 device)
+  - `vendor/ten-vad/iOS/simulator/ten_vad.framework` (arm64 simulator, platform tag rewritten with vtool; see vendor README)
 
-### 跑 macOS Demo
+### Run the macOS Demo
 
 ```bash
 cd examples/macos
@@ -138,48 +131,46 @@ xcodebuild -scheme FgVadDemo -configuration Debug build
 open $(find ~/Library/Developer/Xcode/DerivedData -name FgVadDemo.app | head -1)
 ```
 
-Demo 提供：短/长模式切换、参数实时调节、流式录音、加载 WAV 重跑、句子
-列表 + 按句试听、调试日志写到 `~/Library/Logs/FgVadDemo/run.log`。详见
-[`examples/macos/README.md`](./examples/macos/README.md)。
+The Demo provides: Short/Long mode toggle, real-time parameter adjustment, streaming audio recording, load WAV for replay, sentence list with per-sentence playback, and debug logs at `~/Library/Logs/FgVadDemo/run.log`. See [`examples/macos/README.md`](./examples/macos/README.md).
 
-### 跑 Android Demo
+### Run the Android Demo
 
 ```bash
 cd examples/android/FgVadDemo
-../../../scripts/build-android.sh           # 编 fgvad-jni 并拷 .so
+../../../scripts/build-android.sh           # build fgvad-jni and copy .so files
 adb push ../../../test-data/long/yixi-zhuzhiwei-typography.wav \
   /sdcard/Android/data/io.fengur.fgvaddemo/files/long/
 ./gradlew :app:installDebug
 adb shell am start -n io.fengur.fgvaddemo/.MainActivity
 ```
 
-启动后：长时模式 → 加载测试音频 → `[external] long/yixi-...` → 等解析完成。
+After launch: Long Mode → Load Test Audio → `[external] long/yixi-...` → wait for parsing to complete.
 
-### C 接入最小例子
+### Minimal C Integration Example
 
 ```c
 #include "fgvad.h"
 
-// 长时模式实例
+// Long mode instance
 struct FgVad* vad = fgvad_new_long(
     /* head_silence_timeout_ms  */ 3000,
     /* max_sentence_duration_ms */ 30000,
-    /* max_session_duration_ms  */ 0,        // 0 = 不限
+    /* max_session_duration_ms  */ 0,        // 0 = no limit
     /* tail_silence_ms_initial  */ 2000,
     /* tail_silence_ms_min      */ 600,
     /* enable_dynamic_tail      */ true
 );
 fgvad_start(vad);
 
-// 喂 PCM（16 kHz mono i16）
-int16_t pcm[16000];  // 1 秒
+// Feed PCM (16 kHz mono i16)
+int16_t pcm[16000];  // 1 second
 struct FgVadResults* results = fgvad_process(vad, pcm, 16000);
 
 for (uintptr_t i = 0; i < fgvad_results_count(results); i++) {
     struct FgVadResultView v = fgvad_result_view(results, i);
     if (v.event == FgVadEvent_SentenceEnded || v.event == FgVadEvent_SentenceForceCut) {
-        // 一段完整语音：v.audio_ptr [0, v.audio_len)
-        // 时间戳基准：v.stream_offset_sample（自 start 起的样本数）
+        // Complete speech segment: v.audio_ptr [0, v.audio_len)
+        // Timestamp reference: v.stream_offset_sample (sample count since start)
     }
 }
 fgvad_results_free(results);
@@ -188,139 +179,129 @@ fgvad_stop(vad);
 fgvad_free(vad);
 ```
 
-短时模式构造函数是 `fgvad_new_short(head_silence_timeout, tail_silence,
-max_duration)`。完整 API 见 [`include/fgvad.h`](./include/fgvad.h)。
+The Short Mode constructor is `fgvad_new_short(head_silence_timeout, tail_silence, max_duration)`. Full API in [`include/fgvad.h`](./include/fgvad.h).
 
-## 测试集
+## Test Data
 
-`test-data/` 下提供已落库的真实音频，clone 完直接可复现实验：
+`test-data/` contains real audio files committed to the repository — clone and reproduce experiments immediately:
 
-- **`long/yixi-zhuzhiwei-typography.wav`** —— 25:33 一席演讲（朱志偉
-  《字體的力量》），长时模式核心基线，动态曲线对照实验素材
-- **`short/01-06-*.wav`** —— 短时模式 6 个合成 case，覆盖
-  `HeadSilenceTimeout` / `SpeechCompleted` / `MaxDurationReached` 三条
-  endReason 路径加 2 个边界（短停顿合并、CONFIRM_FRAMES 边界）
+- **`long/yixi-zhuzhiwei-typography.wav`** — 25:33 Yixi talk (Zhu Zhiwei, "The Power of Typography"), the core baseline for long mode and the dynamic curve controlled experiment
+- **`short/01-06-*.wav`** — 6 synthesized short-mode cases, covering all three `endReason` paths (`HeadSilenceTimeout` / `SpeechCompleted` / `MaxDurationReached`) plus 2 edge cases (brief-pause merge, `CONFIRM_FRAMES` boundary)
 
-详见 [`test-data/README.md`](./test-data/README.md)、
-[`test-data/long/README.md`](./test-data/long/README.md) 和
-[`test-data/short/README.md`](./test-data/short/README.md)。
+See [`test-data/README.md`](./test-data/README.md), [`test-data/long/README.md`](./test-data/long/README.md), and [`test-data/short/README.md`](./test-data/short/README.md).
 
-## 测试
+## Tests
 
-`cargo test` 跑全套 49 个测试（含 unit + 集成两层）：
+`cargo test` runs the full suite of 49 tests (unit + integration):
 
-| 测试文件 | 数量 | 内容 |
+| Test file | Count | Content |
 |---------|------|------|
-| `src/lib.rs` (`#[test]`) | 32 | 状态机 / 动态曲线 / FFI 等单元测试 |
-| `tests/real_audio.rs` | 4 | 短时模式端到端（ten-vad 官方 fixture） |
-| `tests/long_mode.rs` | 4 | 长时模式 + ForceCut + ExternalStop |
-| `tests/short_mode_cases.rs` | 6 | 短时 6 个合成 case 一一断言 endReason |
-| `tests/long_mode_yixi.rs` | 3 | 长时动态曲线对照实验（25 分钟一席演讲）|
+| `src/lib.rs` (`#[test]`) | 32 | State machine / dynamic curve / FFI unit tests |
+| `tests/real_audio.rs` | 4 | Short mode end-to-end (ten-vad official fixture) |
+| `tests/long_mode.rs` | 4 | Long mode + ForceCut + ExternalStop |
+| `tests/short_mode_cases.rs` | 6 | Short mode 6 synthesized cases asserting endReason |
+| `tests/long_mode_yixi.rs` | 3 | Long mode dynamic curve controlled experiment (25-min Yixi talk) |
 
-最关键的契约级断言是 `dynamic_curve_substantially_reduces_force_cut_ratio`
-——若动态曲线公式被改坏，ON 模式 ForceCut 占比会超 10% 或不再显著低于
-OFF，cargo test 当场拦下。这条断言对应"它解决什么"那张
-85/5 vs 53/46 表里的设计意图。
+The most critical contract-level assertion is `dynamic_curve_substantially_reduces_force_cut_ratio` — if the dynamic curve formula is broken, the ForceCut ratio in ON mode will exceed 10% or will no longer be significantly lower than OFF, and `cargo test` will catch it immediately. This assertion corresponds to the design intent in the 85/5 vs 53/46 table in "What It Solves."
 
-性能：yixi 长时 3 个测试需要每次把 24M sample 喂进 ten-vad，单线程
-~2-3 分钟；其他全部秒级。CI 上跑完整 cargo test 可接受。
+Performance: the 3 yixi long-mode tests feed 24M samples into ten-vad each run — single-threaded, roughly 2–3 minutes. All other tests are sub-second. Running the full `cargo test` in CI is acceptable.
 
-## 鲁棒性参数（已对齐业界）
+## Robustness Parameters (Aligned with Industry Defaults)
 
-| 参数 | 值 | 说明 |
+| Parameter | Value | Notes |
 |------|----|----|
-| `THRESHOLD` | 0.5 | ten-vad probability 阈值，对齐 Silero 默认 |
-| `CONFIRM_FRAMES` | 16 帧 (256ms) | 头端点防抖，对齐 Silero `min_speech_duration_ms` |
-| `RESUME_CONFIRM_FRAMES` | 5 帧 (80ms) | 尾端点防抖。**fgvad 原创**——业界 VAD 库做 segmentation 不需要，但 endpointing（tail 1-2s 的语义级判停）必须有 |
-| `PRE_ROLL_FRAMES` | 16 帧 (256ms) | SentenceStart 往前带 250ms 音频，给下游识别器留足上下文 |
+| `THRESHOLD` | 0.5 | ten-vad probability threshold, aligned with Silero default |
+| `CONFIRM_FRAMES` | 16 frames (256ms) | Head endpoint debounce, aligned with Silero `min_speech_duration_ms` |
+| `RESUME_CONFIRM_FRAMES` | 5 frames (80ms) | Tail endpoint debounce. **fgvad original** — not needed by segmentation-only VAD libraries, but required for endpointing (semantic-level stop detection with a 1–2s tail) |
+| `PRE_ROLL_FRAMES` | 16 frames (256ms) | SentenceStart carries 250ms of pre-roll audio, giving downstream recognizers sufficient context |
 
-## 当前状态
+## Current Status
 
-| 平台 | Demo | 库构建脚本 | 公开分发(集成方接入) |
+| Platform | Demo | Library Build Script | Public Distribution (integrator access) |
 |---|---|---|---|
-| **macOS 13+**(arm64 + x86_64 universal) | ✅ AppKit Demo([macOS README](./examples/macos/README.md)) | `build-macos-universal.sh` | SPM URL([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0))+ 手动 XCFramework |
-| **iOS 16+**(device + simulator) | ✅ UIKit Demo([iOS README](./examples/ios/README.md))真机 24 分钟连续录音验过 | `build-ios.sh`(device + sim 双 slice) | SPM URL + CocoaPods([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0))+ 手动 XCFramework |
-| **Android API 26+**(arm64-v8a) | ✅ Views Demo([Android README](./examples/android/README.md)) | `build-android.sh`(NDK + JNI) | JitPack([v0.2.0+](https://jitpack.io/#Fengur/fgvad)) |
-| **C/C++**(macOS) | ✅ CMake CLI Demo([C README](./examples/c/README.md)) | `cargo build` + `xcodebuild -create-xcframework` | 仓库内 `examples/c/` 参考接入 |
-| Linux / Windows / WASM | — | — | 暂不计划 |
+| **macOS 13+** (arm64 + x86_64 universal) | ✅ AppKit Demo ([macOS README](./examples/macos/README.md)) | `build-macos-universal.sh` | SPM URL ([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0)) + manual XCFramework |
+| **iOS 16+** (device + simulator) | ✅ UIKit Demo ([iOS README](./examples/ios/README.md)), 24-min continuous recording verified on device | `build-ios.sh` (device + sim dual slice) | SPM URL + CocoaPods ([v0.1.0+](https://github.com/Fengur/fgvad/releases/tag/v0.1.0)) + manual XCFramework |
+| **Android API 26+** (arm64-v8a) | ✅ Views Demo ([Android README](./examples/android/README.md)) | `build-android.sh` (NDK + JNI) | JitPack ([v0.2.0+](https://jitpack.io/#Fengur/fgvad)) |
+| **C/C++** (macOS) | ✅ CMake CLI Demo ([C README](./examples/c/README.md)) | `cargo build` + `xcodebuild -create-xcframework` | Repository `examples/c/` as reference integration |
+| Linux / Windows / WASM | — | — | Not planned |
 
-**输入约束**:仅 16 kHz / 单声道 / i16 PCM
-**噪声**:办公室级别(−50 dBFS)够用;餐厅/车载/户外推荐补一层 energy gate 前置(路线图)
-**v0.1.0** 发布 SPM + Pod + 手动 XCFramework 三种 iOS/macOS 接入;**v0.2.0** 加入 Android 通过 JitPack 一行接入。详见 [Installation](#installation)。
+**Input constraints**: 16 kHz / mono / i16 PCM only
+**Noise**: office-level (−50 dBFS) works fine; for restaurant / in-car / outdoor scenarios, an energy gate pre-filter is recommended (roadmap)
+**v0.1.0** released SPM + Pod + manual XCFramework for iOS/macOS; **v0.2.0** added Android via single-line JitPack integration. See [Installation](#installation).
 
-## 路线图
+## Roadmap
 
-- [ ] 概率曲线 + 动态 tail 曲线 + 角色色带的可视化（Demo）
-- [ ] energy gate 前置过滤（噪声鲁棒性）
-- [x] iOS 库构建支持（device + simulator）
-- [x] iOS Demo（最小录音 + VAD）
-- [x] iOS XCFramework 打包脚本（`scripts/build-xcframework.sh`，含 macOS 三 slice）
-- [x] Android 构建支持（NDK + JNI bridge）
-- [x] Android Demo（含按句试听 + 测试 WAV 重跑）
-- [x] CocoaPods / SPM 分发 —— v0.1.0 起，详见 [Installation](#installation)
-- [x] Android 分发（JitPack） —— v0.2.0 起，详见 [Installation](#installation)
-- [x] 纯 C CLI 集成示例 —— 见 [`examples/c/`](./examples/c/)（macOS 已支持；Linux/embedded 待后续）
-- [ ] 底层引擎深度调优 advanced API（按需暴露 ten-vad 内部参数 / 切换 VAD 引擎，详见下节）
+- [ ] Visualization of probability curve + dynamic tail curve + role color bands (Demo)
+- [ ] Energy gate pre-filter (noise robustness)
+- [x] iOS library build support (device + simulator)
+- [x] iOS Demo (minimal recording + VAD)
+- [x] iOS XCFramework packaging script (`scripts/build-xcframework.sh`, includes macOS three slices)
+- [x] Android build support (NDK + JNI bridge)
+- [x] Android Demo (with per-sentence playback + test WAV replay)
+- [x] CocoaPods / SPM distribution — from v0.1.0, see [Installation](#installation)
+- [x] Android distribution (JitPack) — from v0.2.0, see [Installation](#installation)
+- [x] Pure C CLI integration example — see [`examples/c/`](./examples/c/) (macOS supported; Linux/embedded pending)
+- [ ] Deep tuning advanced API (expose ten-vad internal parameters / switch VAD engine on demand, see next section)
 
-## 设计哲学与未来计划
+## Design Philosophy and Future Plans
 
-### 核心是思路，不是 ten-vad
+### The Core Is the Approach, Not ten-vad
 
-fgvad 想传达的是 **做 ASR-friendly VAD 的方法论**，不是"ten-vad 的 Swift / Kotlin 封装层"。三块核心能力其实跟底层引擎选型无关：
+What fgvad aims to convey is the **methodology for building ASR-friendly VAD**, not "a Swift / Kotlin wrapper for ten-vad." The three core capabilities are actually independent of the underlying engine choice:
 
-- **动态尾端点曲线** —— `tail_ms(t) = max(initial × (1 − t/max), min)` 线性递减，"开头宽容、越说越紧"。任何能输出 voice / silence 帧概率的 VAD 都能套这条曲线
-- **状态机** —— Idle / Detecting / Started / Voiced / Trailing / End 六态 + 短/长时双语义，把"端点检测"分解成可观测的事件流
-- **通知 vs 控制事件** —— 同一个 endpoint 信号（`HeadSilenceTimeout` 等）在长时/短时下意义完全不同，API 设计上必须区分
+- **Dynamic Tail Endpoint Curve** — `tail_ms(t) = max(initial × (1 − t/max), min)` linear decay, "generous at the start, tighter as speech continues." Any VAD that outputs per-frame voice/silence probability can use this curve.
+- **State Machine** — Idle / Detecting / Started / Voiced / Trailing / End six states + short/long dual semantics, decomposing "endpoint detection" into an observable event stream.
+- **Notification vs Control Events** — the same endpoint signal (`HeadSilenceTimeout`, etc.) has completely different meaning in long/short mode; the API design must distinguish them.
 
-如果你选 [Silero VAD](https://github.com/snakers4/silero-vad) / [WebRTC VAD](https://github.com/wiseman/py-webrtcvad) / 自家训练的模型作为底层 voice/silence 帧分类器，把 fgvad 的状态机和动态曲线移植过去，**核心竞争力依然成立**。本仓库的 Rust 状态机（`src/state_machine.rs`）+ 测试集（49 个 cargo test）可以作为参考实现。
+If you choose [Silero VAD](https://github.com/snakers4/silero-vad) / [WebRTC VAD](https://github.com/wiseman/py-webrtcvad) / a proprietary trained model as the underlying voice/silence frame classifier, porting fgvad's state machine and dynamic curve to it keeps the **core value intact**. The Rust state machine in this repo (`src/state_machine.rs`) + the test suite (49 `cargo test` cases) serve as a reference implementation.
 
-ten-vad 是当前默认选择 —— 体积小（~5MB framework）、推理快、五语种通用，且有现成的 macOS / iOS / Android 预编译二进制可 vendor。但它不是这个项目的灵魂。
+ten-vad is the current default — small footprint (~5MB framework), fast inference, supports five languages, and has pre-compiled binaries for macOS / iOS / Android ready to vendor. But it is not the soul of this project.
 
-### 底层引擎参数当前不暴露
+### Underlying Engine Parameters Are Not Exposed
 
-`FgVadAnalyzer` 公开的参数**全部是状态机层面的语义参数**（`headSilenceTimeoutMs` / `tailSilenceMsInitial` 等），不直接透传 ten-vad 内部的 threshold / frame size / 模型变体等实现细节。
+The parameters exposed by `FgVadAnalyzer` are **all state-machine-level semantic parameters** (`headSilenceTimeoutMs` / `tailSilenceMsInitial` etc.); ten-vad's internal threshold / frame size / model variant details are not passed through.
 
-理由：让集成方专注于"端点策略"调参，不被底层引擎实现细节牵走。fgvad 内部的常量（[鲁棒性参数](#鲁棒性参数已对齐业界)章节列出的 THRESHOLD = 0.5、CONFIRM_FRAMES = 16 等）已经过对照实验收敛，办公室级别噪声场景默认值即可。
+Rationale: let the integrator focus on tuning "endpoint strategy" without being pulled into underlying engine details. The internal constants in fgvad (listed in the [Robustness Parameters](#robustness-parameters-aligned-with-industry-defaults) section — THRESHOLD = 0.5, CONFIRM_FRAMES = 16, etc.) have been converged through controlled experiments, and the defaults work well for office-level noise.
 
-未来如果出现"深度调优"需求 —— 比如极端噪声场景需要直接动底层 probability threshold，或者切换到不同 VAD 引擎变体 —— **会通过独立的 advanced API 暴露**（如 `FgVadAnalyzer.Advanced(...)` 或类似），不污染当前主 API。这条对应路线图里 "energy gate 前置过滤" 那项的下游设计空间。
+If "deep tuning" becomes necessary in the future — e.g., extreme noise scenarios requiring direct access to the underlying probability threshold, or switching to a different VAD engine variant — **it will be exposed via a separate advanced API** (such as `FgVadAnalyzer.Advanced(...)` or similar) without polluting the current main API. This corresponds to the design space downstream of the "energy gate pre-filter" item in the roadmap.
 
 ## Installation
 
-### Swift Package Manager（推荐）
+### Swift Package Manager (Recommended)
 
-支持 **iOS 16+** / **macOS 13+**。
+Supports **iOS 16+** / **macOS 13+**.
 
 ```swift
 // Package.swift dependencies:
 .package(url: "https://github.com/Fengur/fgvad.git", from: "0.1.0")
 ```
 
-target 依赖：
+Target dependency:
 
 ```swift
 .product(name: "Fgvad", package: "fgvad")
 ```
 
-Xcode 集成：File → Add Package Dependencies，粘贴 URL `https://github.com/Fengur/fgvad.git`。
+Xcode integration: File → Add Package Dependencies, paste URL `https://github.com/Fengur/fgvad.git`.
 
-**开发期 fgvad 本仓库内** 的 demo / 测试要走本地 dist/ 不走远程下载，跑 `swift build` 前 export：
+**For development within this repo** — demos and tests use a local `dist/` rather than a remote download; before running `swift build`, export:
 
 ```bash
 export FGVAD_LOCAL_BINARIES=1
 ```
 
-### CocoaPods（仅 iOS 16+）
+### CocoaPods (iOS 16+ only)
 
 ```ruby
 # Podfile
 pod 'Fgvad', :git => 'https://github.com/Fengur/fgvad.git', :tag => 'v0.1.0'
 ```
 
-`pod install` 时会自动下载 GitHub Release 上的 XCFramework zip 并解压。**macOS 不走 Pod**，请用 SPM 接入（同一个库，同一个 API）。
+`pod install` will automatically download and unzip the XCFramework from the GitHub Release. **macOS does not use Pod** — use SPM instead (same library, same API).
 
-### Android（JitPack）
+### Android (JitPack)
 
-支持 **Android API 26+ / arm64-v8a**。集成方在 `settings.gradle.kts` 加 JitPack maven 仓库:
+Supports **Android API 26+ / arm64-v8a**. Add the JitPack maven repository to `settings.gradle.kts`:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -332,7 +313,7 @@ dependencyResolutionManagement {
 }
 ```
 
-`app/build.gradle.kts` 加依赖:
+Add the dependency to `app/build.gradle.kts`:
 
 ```kotlin
 dependencies {
@@ -340,7 +321,7 @@ dependencies {
 }
 ```
 
-Kotlin 调用示例:
+Kotlin usage example:
 
 ```kotlin
 import io.fengur.fgvad.FgVad
@@ -354,156 +335,158 @@ vad.start()
 val results = vad.process(samples)  // ShortArray (16kHz mono i16)
 for (r in results) {
     if (r.event == Event.SentenceEnded) {
-        // r.audioSamples 是这一句的整段 PCM
+        // r.audioSamples contains the full PCM for this sentence
     }
 }
 vad.stop()
 vad.close()
 ```
 
-### 手动 XCFramework
+### Manual XCFramework
 
-下载 [v0.1.0 Release](https://github.com/Fengur/fgvad/releases/tag/v0.1.0) 的两个 zip：
+Download both zips from [v0.1.0 Release](https://github.com/Fengur/fgvad/releases/tag/v0.1.0):
 - `FgvadCore.xcframework.zip`
 - `ten_vad.xcframework.zip`
 
-解压后两个 `.xcframework` 拖进 Xcode 项目，Embed & Sign。Swift wrapper 源码也要拷一份（从 [`Sources/Fgvad/FgVadAnalyzer.swift`](./Sources/Fgvad/FgVadAnalyzer.swift) 拷到自己工程）。
+Unzip both and drag the two `.xcframework` bundles into your Xcode project. Set to Embed & Sign. Also copy the Swift wrapper source (from [`Sources/Fgvad/FgVadAnalyzer.swift`](./Sources/Fgvad/FgVadAnalyzer.swift) into your project).
 
-### 接入示例
+### Integration Examples
 
-fgvad 是流式 API，调用三段对齐 ASR 客户端的 **begin / 中间包 / 尾包** 心智。**短时和长时两种模式的事件处理逻辑不同，分别给完整示例**：
+fgvad is a streaming API whose three-phase call pattern maps to the **begin / middle packets / end packet** mental model of an ASR client. **Short Mode and Long Mode have different event handling logic — complete examples for both:**
 
-#### 短时模式（命令 / 查询场景）
+#### Short Mode (Commands / Queries)
 
-一次 `start` 对应**一句话**。VAD 内部判停后 state 自动转 End，外部按 state 收尾即可。
+One `start` corresponds to **one utterance**. VAD transitions state to End internally after detecting the endpoint; the external caller just checks state to wrap up.
 
 ```swift
 import Fgvad
 
 // 1. begin
 let analyzer = try FgVadAnalyzer(mode: .short(.init(
-    headSilenceTimeoutMs: 3_000,    // 没开口超时直接放弃
-    tailSilenceMs: 2_000,           // 尾静音 2s 就认为说完了
-    maxDurationMs: 30_000,          // 单次最多录 30s
+    headSilenceTimeoutMs: 3_000,    // No speech → timeout and give up
+    tailSilenceMs: 2_000,           // 2s tail silence means speech is complete
+    maxDurationMs: 30_000,          // Record at most 30s per session
 )))
 analyzer.start()
 
-// 2. 中间包 —— chunk 持续喂(典型 20-100ms / chunk)
+// 2. Middle packets — keep feeding chunks (typical 20-100ms / chunk)
 recorder.onChunk = { chunk in
     let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
     for r in results {
         if r.event == FgVadEvent_SentenceStarted {
-            // 启动 ASR 会话(发首包)
+            // Start ASR session (send begin packet)
         }
         if r.type == FgVadResultType_SentenceEnd {
-            // 发尾包 + 等识别结果
-            // r.audioLen 个采样是这句完整 PCM
+            // Send end packet + wait for recognition result
+            // r.audioLen samples are the complete PCM for this sentence
         }
-        // 短时下其他事件(HeadSilenceTimeout / MaxDurationReached)
-        // 都是控制信号 —— 不用单独处理,下面 state == End 统一收尾
+        // In short mode, other events (HeadSilenceTimeout / MaxDurationReached)
+        // are control signals — no need to handle separately;
+        // state == End below unifies all termination paths
     }
 
-    // 3. end —— 短时所有终止路径汇聚到 state == End
+    // 3. end — all short-mode termination paths converge at state == End
     if analyzer.state == FgVadState_End {
         analyzer.stop()
         recorder.stop()
 
-        // analyzer.endReason 告诉你具体哪种终止:
-        //   .speechCompleted   —— 用户正常说完
-        //   .headSilenceTimeout —— 没开口就超时放弃
-        //   .maxDurationReached —— 撞 30s 上限被强停
-        //   .externalStop      —— 外部主动 stop()
+        // analyzer.endReason tells you the specific termination cause:
+        //   .speechCompleted    — user finished speaking normally
+        //   .headSilenceTimeout — no speech detected, timed out
+        //   .maxDurationReached — hit the 30s cap
+        //   .externalStop       — externally triggered stop()
     }
 }
 ```
 
-#### 长时模式（连续听写场景）
+#### Long Mode (Continuous Dictation)
 
-一次 `start` 对应**多句连续**。state 不会自动转 End，只在外部 `stop()` 或 `max_session_duration` 终止。`HeadSilenceTimeout` 是 prompt 用户的通知，不结束会话。
+One `start` corresponds to **multiple continuous sentences**. State does not automatically transition to End; it only terminates via external `stop()` or `max_session_duration`. `HeadSilenceTimeout` is a notification to prompt the user, not a session terminator.
 
 ```swift
 import Fgvad
 
 // 1. begin
 let analyzer = try FgVadAnalyzer(mode: .long(.init(
-    headSilenceTimeoutMs: 3_000,         // 提示用户的间隔(周期性 prompt)
-    maxSentenceDurationMs: 30_000,       // 单句撞此值强切(吐 SentenceForceCut)
-    maxSessionDurationMs: 0,             // 0 = 整会话不限时长
-    tailSilenceMsInitial: 2_000,         // 动态尾端点初始值
-    tailSilenceMsMin: 600,               // 动态尾端点下限
-    enableDynamicTail: true,             // 启用动态曲线(关掉会让 87% 句子被强切)
+    headSilenceTimeoutMs: 3_000,         // Interval for prompting the user (periodic)
+    maxSentenceDurationMs: 30_000,       // Per-sentence cap; triggers SentenceForceCut
+    maxSessionDurationMs: 0,             // 0 = no session time limit
+    tailSilenceMsInitial: 2_000,         // Dynamic tail endpoint initial value
+    tailSilenceMsMin: 600,               // Dynamic tail endpoint floor
+    enableDynamicTail: true,             // Enable dynamic curve (disabling causes 87% force-cut)
 )))
 analyzer.start()
 
-// 2. 中间包
+// 2. Middle packets
 recorder.onChunk = { chunk in
     let results = try chunk.withUnsafeBufferPointer { try analyzer.feed($0) }
     for r in results {
         if r.event == FgVadEvent_SentenceStarted {
-            // 启动新一轮 ASR 会话(每句一轮)
+            // Start a new ASR session (one session per sentence)
         }
         if r.type == FgVadResultType_SentenceEnd {
-            // 发尾包 + 等识别结果(继续等下一句)
-            // r.audioLen 是这句完整 PCM
-            // r.event == FgVadEvent_SentenceForceCut 时,UX 上提示"被强切"
+            // Send end packet + wait for recognition result (continue waiting for next sentence)
+            // r.audioLen is the full PCM for this sentence
+            // If r.event == FgVadEvent_SentenceForceCut, show "force cut" in UX
         }
         if r.event == FgVadEvent_HeadSilenceTimeout {
-            // 长时的通知事件:周期性 prompt 用户
-            //   例如 UI 上显示"您已经 3 秒没说话了"
-            // 不要停录音,会话继续
+            // Long-mode notification event: periodic user prompt
+            //   e.g., show "You haven't spoken for 3 seconds" in the UI
+            // Do not stop recording; session continues
         }
     }
 
-    // 长时不看 state == End —— 没人主动 stop 它永远不会到 End
-    // (除非显式设了 max_session_duration_ms 撞上限)
+    // Long mode does not watch state == End — without an explicit stop it never reaches End
+    // (unless max_session_duration_ms was set and reached)
 }
 
-// 3. end —— 长时典型路径:用户主动停录音
+// 3. end — typical long-mode path: user actively stops recording
 recorder.onStop = {
     analyzer.stop()
-    // stop() 时如果还在 Active 段,下一次 feed (空 chunk 也行) 会触发
-    // ExternalStop 路径吐"人造尾包"。如果 stop 后不再 feed,
-    // 那段 audio 就丢了 —— 推荐 stop 前最后喂一次空 chunk:
+    // If stop() is called while still in an Active segment, the next feed (even an empty chunk)
+    // will trigger the ExternalStop path and emit a "synthesized end packet."
+    // If no more feed after stop(), that audio segment is lost.
+    // Recommended: feed one empty chunk before stop():
     //
     //   try [].withUnsafeBufferPointer { try analyzer.feed($0) }
     //   analyzer.stop()
 }
 ```
 
-**关键区别**:
+**Key differences**:
 
-| 关注点 | 短时 | 长时 |
+| Concern | Short Mode | Long Mode |
 |---|---|---|
-| 终止判断 | `state == End`(所有终止都汇聚到这) | 外部 `stop()` / 撞 `max_session` |
-| `HeadSilenceTimeout` | 控制信号(state 自动转 End) | 通知事件(prompt 用户,不停) |
-| `SentenceEnd` 触发后 | 关录音(单句模式只有一句) | 继续录音等下一句 |
-| 典型时长 | 数秒~30s | 数分钟到不限 |
+| Termination check | `state == End` (all termination paths converge here) | External `stop()` / reaching `max_session` |
+| `HeadSilenceTimeout` | Control signal (state auto-transitions to End) | Notification event (prompt user, no stop) |
+| After `SentenceEnd` fires | Stop recording (single-sentence mode has only one sentence) | Continue recording for next sentence |
+| Typical duration | A few seconds to 30s | Minutes to unlimited |
 
-### 事件 → 业务动作映射
+### Event → Business Action Mapping
 
-同一个事件在两种模式下意义完全不同 —— 这是 fgvad 设计的核心。集成方按下表对接业务：
+The same event has completely different meaning in the two modes — this is the core of fgvad's design. Integrators should wire up business logic according to the table below:
 
-| 事件 | 短时模式（撞哪个参数） | 长时模式（撞哪个参数） |
+| Event | Short Mode | Long Mode |
 |---|---|---|
-| `SentenceStarted` | 启动 ASR 识别(发首包) | 启动新一轮 ASR 识别(多句连续,每句一轮) |
-| `SentenceEnded` | **关闭录音** + 发尾包 —— 撞 `tailSilenceMs`(默认 2000ms) | 发尾包,**继续录音**等下一句 —— 撞动态曲线(`tailSilenceMsInitial` 2000ms 收到 `tailSilenceMsMin` 600ms) |
-| `SentenceForceCut` | (短时不触发,短时只有一句) | 发尾包,**继续录音**(用户讲太长被切) —— 撞 `maxSentenceDurationMs`(默认 30000ms) |
-| `HeadSilenceTimeout` | **关闭录音** —— 用户没开口放弃 —— 撞 `headSilenceTimeoutMs`(默认 3000ms,触发即结束) | **提示用户**"您 N 秒没说话了",**不停录音** —— 每 `headSilenceTimeoutMs`(默认 3000ms)周期性提示 |
-| `MaxDurationReached` | **关闭录音** —— 撞 `maxDurationMs`(默认 30000ms) | **关闭整个会话** —— 撞 `maxSessionDurationMs`(**默认 0 = 不限,需显式设非零才触发**) |
+| `SentenceStarted` | Start ASR recognition (send Begin Packet) | Start a new ASR session (multi-sentence continuous, one session per sentence) |
+| `SentenceEnded` | **Stop recording** + send End Packet, wait for result | Send End Packet, **continue recording** for next sentence |
+| `SentenceForceCut` | **Stop recording** + send End Packet (single sentence hit max) | Send End Packet, **continue recording** (user spoke too long) |
+| `HeadSilenceTimeout` | **Stop recording** — user pressed record but said nothing | **Prompt user** "You haven't spoken for N seconds," **do not stop recording** |
+| `MaxDurationReached` | **Stop recording** — single-session total duration cap | **End the entire session** — session total duration cap |
 
-**判尾包看 `r.type` 不要看 `r.event`**：库把所有"尾包语义"——SentenceEnded（自然）/ SentenceForceCut（单句强切）/ MaxDurationReached + ExternalStop 触发时还在说话的"人造尾包"——统一打到 `r.type == SentenceEnd`。`r.event` 只用来细分**原因**（要不要给用户 UX 提示"被强切了"）。
+**Check `r.type` for end packets, not `r.event`**: the library unifies all "end packet semantics" — SentenceEnded (natural) / SentenceForceCut (per-sentence force cut) / the "synthesized end packet" emitted when MaxDurationReached or ExternalStop fires while speech is active — all tagged as `r.type == SentenceEnd`. `r.event` is used only to distinguish the **reason** (whether to show the user a "force cut" UX notice).
 
-**核心差异 —— `HeadSilenceTimeout` 在两种模式下天差地别**：
-- 短时下是 **控制信号**：state 直接转 End，会话终止 → 你应当关录音
-- 长时下是 **通知事件**：state 不变，会话继续 → 你应当 prompt 用户但**不动录音**
+**Critical difference — `HeadSilenceTimeout` behaves completely differently across modes**:
+- In Short Mode: **control signal** — state transitions directly to End, session terminates → you should stop recording
+- In Long Mode: **notification event** — state unchanged, session continues → you should prompt the user but **leave recording alone**
 
-短时模式所有终止路径都汇聚到一个观测点：`analyzer.state == FgVadState_End`。判断该不该关录音直接看这个 state，不需要按事件分支。
+In Short Mode, all termination paths converge at a single observation point: `analyzer.state == FgVadState_End`. Check this state to decide whether to stop recording; no need for per-event branching.
 
-长时模式的终止只有两条：外部 `stop()`（用户主动停）或 `MaxDurationReached`（会话总时长到）。`HeadSilenceTimeout` 永远只是通知。
+In Long Mode, there are only two termination paths: external `stop()` (user actively stops) or `MaxDurationReached` (session total duration reached). `HeadSilenceTimeout` is always just a notification.
 
-### 批式回放
+### Batch Replay
 
-不流式跑也行 —— 调参 / 回归测试常用：
+Streaming is not required — batch mode is commonly used for parameter tuning and regression testing:
 
 ```swift
 let (results, finalState, endReason) = try FgVadAnalyzer.analyze(
@@ -511,8 +494,8 @@ let (results, finalState, endReason) = try FgVadAnalyzer.analyze(
 )
 ```
 
-整段 PCM 喂进去，吐所有 results + 最终 state + endReason。
+Feed in the entire PCM at once; receive all results + final state + endReason.
 
 ## License
 
-MIT —— 见 [LICENSE](./LICENSE)。底层 ten-vad 遵循 Apache 2.0。
+MIT — see [LICENSE](./LICENSE). The underlying ten-vad follows Apache 2.0.

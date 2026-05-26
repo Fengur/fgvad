@@ -1,40 +1,40 @@
-# FgVadDemo —— fgvad 的 iOS 测试 / 接入样本
-> [English](README.en.md) | 中文
+# FgVadDemo — iOS Testing / Integration Sample for fgvad
+> English | [中文](README_CN.md)
 
-UIKit + 纯 frame 布局,**复用 OC RemoteIO AudioUnit 录音器**(`FGAudioController` / `FGIOSRecorder`,跑在 RemoteIO AU 专用 NSThread + run loop 上,串行化 AU 操作)。Swift 业务层通过 `import Fgvad` 调用 wrapper。
+UIKit + pure frame layout, **reusing an OC RemoteIO AudioUnit recorder** (`FGAudioController` / `FGIOSRecorder`, running on a dedicated NSThread + run loop for the RemoteIO AU, serializing AU operations). The Swift business layer calls the wrapper via `import Fgvad`.
 
-既是对外的使用示例,也是真机端到端验证 fgvad 的工具。
+Serves both as an external usage example and as a tool for end-to-end on-device validation of fgvad.
 
-## 构建方式
+## Build
 
 ```bash
 cd examples/ios/FgVadDemo
-xcodegen generate                                        # 改了 project.yml 后跑
+xcodegen generate                                        # re-run after modifying project.yml
 
-# 命令行 build(给 CI / Simulator 用)
+# Command-line build (for CI / Simulator)
 xcodebuild -project FgVadDemo.xcodeproj -scheme FgVadDemo \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   -configuration Debug build
 
-# 真机:Xcode 打开 ⌘R(首次必须 Xcode UI 触发签名 + iOS platform 安装)
+# Real device: open in Xcode and press ⌘R (first run must go through Xcode UI to trigger signing + iOS platform install)
 open FgVadDemo.xcodeproj
 ```
 
-## 真机签名
+## Device Signing
 
-`project.yml` 默认不指定 `DEVELOPMENT_TEAM` —— 第一次 ⌘R 时 Xcode 会自动加你的 personal team ID 到 `.pbxproj`(本地变更,不入库)。Demo 不依赖任何付费 Apple Developer 账号。
+`project.yml` does not specify `DEVELOPMENT_TEAM` by default — the first ⌘R in Xcode will automatically add your personal team ID to `.pbxproj` (local change, not committed). The Demo does not require a paid Apple Developer account.
 
-如果本机没装当前 Xcode SDK 对应的 iOS platform package,Xcode UI 会弹下载提示(8GB+,一次性)。装完真机 ⌘R 即可。
+If the iOS platform package for the current Xcode SDK is not installed, Xcode UI will prompt you to download it (8GB+, one-time). After it installs, ⌘R on a real device works.
 
-## Demo 接入 fgvad 的方式(dev 工作流)
+## How the Demo Integrates fgvad (Dev Workflow)
 
-Demo 通过 **Swift Package Manager `path:` 模式**消费 fgvad,**不走公开 GitHub Release URL**:
+The Demo consumes fgvad via **Swift Package Manager `path:` mode** — it does **not** use the public GitHub Release URL:
 
 ```yaml
 # project.yml
 packages:
   Fgvad:
-    path: ../../..   # 仓库根,Package.swift 在那里
+    path: ../../..   # repo root, where Package.swift lives
 
 targets:
   FgVadDemo:
@@ -43,32 +43,32 @@ targets:
         product: Fgvad
 ```
 
-dev 期改 Swift wrapper(`Sources/Fgvad/FgVadAnalyzer.swift`)立即在 demo build 看到。改 Rust 代码(`src/`)需要重跑 `./scripts/build-xcframework.sh` 重生成 `dist/*.xcframework`,demo 才能看到。
+During development, changes to the Swift wrapper (`Sources/Fgvad/FgVadAnalyzer.swift`) are immediately visible on the next demo build. Changes to Rust code (`src/`) require re-running `./scripts/build-xcframework.sh` to regenerate `dist/*.xcframework` before the demo picks them up.
 
-`Package.swift` 用 `FGVAD_LOCAL_BINARIES` 环境变量切换 path / url 模式。dev 默认 url 模式从 GitHub Release 下载 zip(首次 build 慢,会 cache)。如果需要走本地 dist/ 加速调试:
+`Package.swift` uses the `FGVAD_LOCAL_BINARIES` environment variable to switch between path / url modes. By default in dev the url mode downloads the zip from GitHub Release (slow on first build, cached afterwards). To switch to local `dist/` for faster iteration:
 
 ```bash
 export FGVAD_LOCAL_BINARIES=1
-./scripts/build-xcframework.sh    # 先打 dist/ XCFramework
+./scripts/build-xcframework.sh    # build dist/ XCFramework first
 xcodebuild -project FgVadDemo.xcodeproj -scheme FgVadDemo build
 ```
 
-## 当前功能
+## Current Features
 
-- **短/长时模式切换** + 参数面板
-- **流式录音** + 实时事件流
-- **加载测试 WAV 重跑**(test-data/short 6 个 case + test-data/long yixi 单击进 app bundle)
-- **句子列表 + 按句试听**(AVAudioPlayer 切片临时 WAV)
-- **导出日志按钮**(Documents/run.log,通过 UIFileSharingEnabled 暴露给 Files app)
-- 已知小瑕疵:OC 录音器 `FGAudioController` 的 4 个 `atomic` 属性 .h/.m 不一致警告(老代码,不影响功能)
+- **Short / Long Mode toggle** + parameter panel
+- **Streaming recording** + real-time event stream
+- **Load test WAV for replay** (test-data/short 6 cases + test-data/long yixi, single-tap loads into app bundle)
+- **Sentence list + per-sentence playback** (AVAudioPlayer slices a temporary WAV)
+- **Export log button** (Documents/run.log, exposed to the Files app via UIFileSharingEnabled)
+- Known minor issue: 4 `atomic` properties in the OC recorder `FGAudioController` have mismatched `.h`/`.m` declarations causing warnings (legacy code, does not affect functionality)
 
-## 依赖
+## Dependencies
 
 - Xcode 16+ / iOS 16+
-- Rust toolchain(`rustup`)
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen):`brew install xcodegen`
+- Rust toolchain (`rustup`)
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
-## 已验证
+## Verified
 
-- iPhone 17 Pro Simulator BUILD SUCCEEDED + 进程稳定存活
-- iPhone XS Max(iOS 26.5)真机 24 分钟连续长时模式录音 + VAD 稳定切句 + `import Fgvad` 全栈链路工作
+- iPhone 17 Pro Simulator: BUILD SUCCEEDED + process stable
+- iPhone XS Max (iOS 26.5), real device: 24-minute continuous Long Mode recording + stable VAD sentence segmentation + full `import Fgvad` stack verified
